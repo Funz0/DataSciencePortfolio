@@ -4,3 +4,9 @@
 .Ruserdata
 .ipynb_checkpoints/BNB_Linear_Model-checkpoint.ipynb
 BNB_Project/.ipynb_checkpoints/BNB_Linear_Model-checkpoint.ipynb
+.DS_Store
+BNB_Project/.idea/BNB_Project.iml
+BNB_Project/.idea/misc.xml
+BNB_Project/.idea/modules.xml
+BNB_Project/.idea/vcs.xml
+BNB_Project/bnb-usdt.csv
