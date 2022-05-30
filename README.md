@@ -1,2 +1,2 @@
 # DataSciencePortfolio
-A collection of projects related to data science with the purpose of finding my true calling in the data verse.
+A collection of projects focused on data handling, feature engineering, statistical modeling, and machine learning, among others.
