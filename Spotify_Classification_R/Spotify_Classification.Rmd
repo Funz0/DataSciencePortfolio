@@ -1,0 +1,186 @@
+---
+title: "Spotify Predictive Analytics Project"
+author: "Alejandro Cepeda"
+date: "5/23/2022"
+output: html_document
+---
+
+#
+
+```{r setup, include=FALSE}
+# set working directory
+setwd("~/Documents/GitHub/DataSciencePortfolio/Spotify_Classification_R")
+```
+
+```{r}
+# libraries
+library(tidyverse)
+library(caret)
+
+# read in data
+spotify_raw <- read_csv("SpotifyFeatures.csv")
+str(spotify_raw)
+head(spotify_raw)
+summary(spotify_raw)
+```
+
+
+## Data Cleaning
+
+```{r}
+# 
+spotify_clean <- spotify_raw %>%
+  # remove any duplicate songs
+  distinct() %>%
+  # selecting relevant variables
+  select(-c(artist_name, track_name, track_id)) %>%
+  # convert character variables to factor
+  mutate(genre = as_factor(genre),
+         key = as_factor(key),
+         mode = as_factor(mode),
+         time_signature = as_factor(time_signature))
+
+# check for NAs
+colSums(is.na(spotify_clean))
+```
+
+
+## Eploratory Data Analysis
+
+```{r}
+# storing audio features for analysis 
+spotify_feat <- spotify_clean %>% 
+  select(where(is.numeric)) 
+
+summary(spotify_feat)
+
+# plot number of songs per selected genre
+spotify_clean %>% 
+  ggplot(aes(genre, fill=genre)) +
+  geom_bar() +
+  coord_polar() +
+  theme_void()
+
+# density plot of numeric features
+plot(spotify_feat)
+# plot factor features
+key_bp <- ggplot(spotify_clean, aes(x=key)) +
+  geom_bar(aes(fill=key)) +
+  theme(axis.text.x=element_blank())
+mode_bp <- ggplot(spotify_clean, aes(x=mode)) +
+  geom_bar(aes(fill=mode)) +
+  theme(axis.text.x=element_blank())
+time_sig_bp <- ggplot(spotify_clean, aes(x=time_signature)) +
+  geom_bar(aes(fill=time_signature)) +
+  theme(axis.text.x=element_blank())
+
+# display all factor features
+ggarrange(key_bp, mode_bp, time_sig_bp,
+          widths=c(0.5,0.5), heights=c(0.5,0.5))
+
+# correlation plot of feature selection
+feat_corr <- cor(spotify_feat)
+corrplot(feat_corr,
+         type="upper",
+         diag=FALSE,
+         tl.srt=45,
+         tl.col="black")
+# remove acousticness (highest negative correlation)
+spotify_clean$acousticness <- NULL
+# dropping the following variables (not valuable for model)
+spotify_clean$mode <- NULL
+spotify_clean$time_signature <- NULL
+```
+
+
+## Feature Engineering
+
+```{r}
+# creating index and creating train/test split
+set.seed(123)
+index <- createDataPartition(spotify_clean$genre, p=0.70, list=FALSE)
+spotify_train <- spotify_clean[index,]
+spotify_test <- spotify_clean[-index,]
+
+# training control for models
+ctrl <- trainControl(method="cv", number=10, verboseIter=FALSE)
+```
+
+## Model Training/Validation
+
+### Random Forest
+```{r}
+set.seed(123)
+# random forest model
+rf_model <- ranger(genre~.,
+                   spotify_train,
+                   importance="impurity",
+                   verbose=0)
+rf_model
+# storing best tunegrid params
+tunegrid_rf <- expand.grid(mtry=rf_model$mtry, splitrule=rf_model$splitrule, min.node.size=rf_model$min.node.size)
+# train rf model w 10 fold cv
+rf_train <- train(track_genre~., 
+                  spotify_train, 
+                  method="ranger", 
+                  tuneGrid=tunegrid_rf, 
+                  trControl=ctrl)
+print(rf_train)
+# training confusion matrix
+confusionMatrix(rf_train$finalModel$predictions, spotify_train$track_genre)
+
+# compute accuracy on test set
+rf_pred <- predict(rf_train, newdata=spotify_test)
+summary(rf_pred)
+# test pred confusion matrix
+rf_cm <- confusionMatrix(rf_pred, spotify_test$track_genre)
+rf_cm
+# RF used a lot of memory (~300MB)
+
+# plot results with "vip" package
+(rf_varImp<- vip(rf_model, geom="point", horizontal=FALSE,
+              aes=list(color="blue", shape=17, size=5)) +
+              theme_light())
+```
+
+### Gradient Boosting
+```{r}
+library(gbm)
+set.seed(123)
+# training gb model with cv
+gbm_model <- train(track_genre~., 
+                   spotify_train,
+                   method="gbm",
+                   trControl=ctrl,
+                   verbose=0)
+print(gbm_model)
+# train set predictions
+gbm_train_pred <- predict(gbm_model)
+gbm_train_result <- data.frame(spotify_train$track_genre, gbm_train_pred)
+# training confusion matrix
+gbm_train_cm <- confusionMatrix(spotify_train$track_genre, as.factor(gbm_train_pred))
+print(gbm_train_cm)
+# test set predictions
+gbm_pred <- predict(gbm_model, newdata=spotify_test)
+gbm_result <- data.frame(spotify_test$track_genre, gbm_pred)
+# computing confusion matrix on test preds
+gbm_cm <- confusionMatrix(spotify_test$track_genre, as.factor(gbm_pred))
+print(gbm_cm)
+# less memory usage (~20MB) but worse acc
+
+# gbm variable importance
+(gbm_varImp <- vip(gbm_model, geom="point", horizontal=FALSE,
+                 aes=list(color="blue", shape=17, size=5)) +
+                 theme_light())
+```
+
+### Model Comparison
+```{r}
+# test variable importance by model
+ggarrange(rf_varImp, gbm_varImp, gbm2_varImp,
+          widths=c(0.5,0.5,0.5), heights=c(0.5,0.5,0.5), nrow=3)
+# test confusion matrix by model
+kable(rf_cm$table)
+kable(gbm_cm$table)
+kable(gbm2_cm$table)
+```
