@@ -38,7 +38,7 @@ Music (listening and playing) is one of my favorites pastimes and go-to therapy 
 
 The following are the packages used throughout this project:
 
-```{r, echo=FALSE}
+```{r, message=FALSE}
 # libraries
 library(tidyverse)
 library(corrplot)
@@ -281,12 +281,18 @@ spotify_clean <- spotify_clean %>%
   select(-c(mode, time_signature))
 ```
 
+#### One-Hot Encoding
+
+```{r "One-Hot Encoding"}
+
+```
+
 ### Correlation {#correlation}
 
 ...
 
-```{r "Correlation"}
-
+```{r "Correlation", eval=FALSE}
+# correlation plot of numerical features (add categorical once encoding is done)
 spotify_clean %>%
   select(feature_names) %>%
   cor() %>%
@@ -303,7 +309,7 @@ spotify_clean$loudness <- NULL
 
 ### Train/Test Split
 
-```{r}
+```{r "Train/Test Split", eval=FALSE}
 # creating index and creating train/test split
 set.seed(123)
 index <- createDataPartition(spotify_final$genre, p=0.70, list=FALSE)
@@ -318,13 +324,13 @@ ctrl <- trainControl(method="cv", number=10, verboseIter=FALSE)
 
 ### Nearest Neighbors
 
-```{r "Nearest Neighbors"}
+```{r "Nearest Neighbors", eval=FALSE}
 
 ```
 
 ### Random Forest
 
-```{r "Random Forest"}
+```{r "Random Forest", eval=FALSE}
 set.seed(123)
 # random forest model
 rf_model <- ranger(genre~.,
@@ -360,7 +366,7 @@ rf_cm
 
 ### Gradient Boosting
 
-```{r "Gradient Boosting"}
+```{r "Gradient Boosting", eval=FALSE}
 library(gbm)
 set.seed(123)
 # training gb model with cv
@@ -392,7 +398,7 @@ print(gbm_cm)
 
 ### Model Comparison
 
-```{r "Model Comparison"}
+```{r "Model Comparison", eval=FALSE}
 # test variable importance by model
 ggarrange(rf_varImp, gbm_varImp, gbm2_varImp,
           widths=c(0.5,0.5,0.5), heights=c(0.5,0.5,0.5), nrow=3)
