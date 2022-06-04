@@ -277,7 +277,7 @@ spotify_clean %>%
         axis.text.y = element_blank())
 ```
 
-![](Spotify_Classification_files/figure-gfm/Numerical%20Features-1.png)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Numerical%20Features-1.jpeg)<!-- -->
 
 Based on the density plots above, `duration_min`, `instrumentalness`,
 `liveness`, `loudness`, `popularity`, and `speechiness` require further
@@ -294,7 +294,7 @@ spotify_clean %>%
   ggtitle("Duration (in minutes)")
 ```
 
-![](Spotify_Classification_files/figure-gfm/Track%20Duration-1.png)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Track%20Duration-1.jpeg)<!-- -->
 
 ``` r
 # store outliers based on 4th whisker
@@ -312,7 +312,7 @@ spotify_clean %>%
   ggtitle("Duration(in minutes) - no outliers")
 ```
 
-![](Spotify_Classification_files/figure-gfm/Track%20Duration-2.png)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Track%20Duration-2.jpeg)<!-- -->
 
 **Instrumentalness**
 
@@ -325,7 +325,7 @@ spotify_clean %>%
   ggtitle("Instrumentalness")
 ```
 
-![](Spotify_Classification_files/figure-gfm/Instrumentalness-1.png)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Instrumentalness-1.jpeg)<!-- -->
 
 ``` r
 # determine number of genres with no instrumentalness
@@ -340,7 +340,7 @@ spotify_clean %>%
 
     ## Warning: Removed 57791 rows containing non-finite values (stat_density).
 
-![](Spotify_Classification_files/figure-gfm/Instrumentalness-2.png)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Instrumentalness-2.jpeg)<!-- -->
 
 After the analysis above, the option I believe to be most useful to the
 model performance is to remove this feature altogether as there are
@@ -373,7 +373,7 @@ spotify_clean %>%
   labs(title = "Speechiness")
 ```
 
-![](Spotify_Classification_files/figure-gfm/Speechiness-1.png)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Speechiness-1.jpeg)<!-- -->
 
 ``` r
 # store outliers within duration_min
@@ -391,7 +391,7 @@ spotify_clean %>%
   labs(title = "Speechiness, less outliers")
 ```
 
-![](Spotify_Classification_files/figure-gfm/Speechiness-2.png)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Speechiness-2.jpeg)<!-- -->
 
 ### Categorical Features
 
@@ -402,21 +402,21 @@ genre_bar <- ggplot(spotify_clean)
 genre_bar + geom_bar(aes(key)) 
 ```
 
-![](Spotify_Classification_files/figure-gfm/Categorical%20Features-1.png)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Categorical%20Features-1.jpeg)<!-- -->
 
 ``` r
 # mode
 genre_bar + geom_bar(aes(mode))
 ```
 
-![](Spotify_Classification_files/figure-gfm/Categorical%20Features-2.png)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Categorical%20Features-2.jpeg)<!-- -->
 
 ``` r
 # time_signature
 genre_bar + geom_bar(aes(time_signature))
 ```
 
-![](Spotify_Classification_files/figure-gfm/Categorical%20Features-3.png)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Categorical%20Features-3.jpeg)<!-- -->
 
 **Key**
 
