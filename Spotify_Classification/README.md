@@ -106,7 +106,7 @@ Let’s read in the dataset from the working directory:
 ``` r
 # read in data
 spotify <- read_csv("SpotifyFeatures.csv", show_col_types = FALSE)
-glimpse(spotify)
+tibble(glimpse(spotify))
 ```
 
     ## Rows: 232,725
@@ -129,6 +129,24 @@ glimpse(spotify)
     ## $ tempo            <dbl> 166.969, 174.003, 99.488, 171.758, 140.576, 87.479, 8~
     ## $ time_signature   <chr> "4/4", "4/4", "5/4", "4/4", "4/4", "4/4", "4/4", "4/4~
     ## $ valence          <dbl> 0.8140, 0.8160, 0.3680, 0.2270, 0.3900, 0.3580, 0.533~
+
+    ## # A tibble: 232,725 x 18
+    ##    genre artist_name    track_name track_id popularity acousticness danceability
+    ##    <chr> <chr>          <chr>      <chr>         <dbl>        <dbl>        <dbl>
+    ##  1 Movie Henri Salvador C'est bea~ 0BRjO6g~          0      0.611          0.389
+    ##  2 Movie Martin & les ~ Perdu d'a~ 0BjC1Nf~          1      0.246          0.59 
+    ##  3 Movie Joseph Willia~ Don't Let~ 0CoSDzo~          3      0.952          0.663
+    ##  4 Movie Henri Salvador Dis-moi M~ 0Gc6TVm~          0      0.703          0.24 
+    ##  5 Movie Fabien Nataf   Ouverture  0IuslXp~          4      0.95           0.331
+    ##  6 Movie Henri Salvador Le petit ~ 0Mf1jKa~          0      0.749          0.578
+    ##  7 Movie Martin & les ~ Premières~ 0NUiKYR~          2      0.344          0.703
+    ##  8 Movie Laura Mayne    Let Me Le~ 0PbIF9Y~         15      0.939          0.416
+    ##  9 Movie Chorus         Helka      0ST6uPf~          0      0.00104        0.734
+    ## 10 Movie Le Club des J~ Les bisou~ 0VSqZ3K~         10      0.319          0.598
+    ## # ... with 232,715 more rows, and 11 more variables: duration_ms <dbl>,
+    ## #   energy <dbl>, instrumentalness <dbl>, key <chr>, liveness <dbl>,
+    ## #   loudness <dbl>, mode <chr>, speechiness <dbl>, tempo <dbl>,
+    ## #   time_signature <chr>, valence <dbl>
 
 ## Data Preparation
 
@@ -167,32 +185,46 @@ may be helpful in the case of a misleading genre being present.
 
 ``` r
 # ensure genres are properly written
-levels(spotify_clean$genre)
+tibble(levels(spotify_clean$genre))
 ```
 
-    ##  [1] "Movie"            "R&B"              "A Capella"        "Alternative"     
-    ##  [5] "Country"          "Dance"            "Electronic"       "Anime"           
-    ##  [9] "Folk"             "Blues"            "Opera"            "Hip-Hop"         
-    ## [13] "Children's Music" "Children’s Music" "Rap"              "Indie"           
-    ## [17] "Classical"        "Pop"              "Reggae"           "Reggaeton"       
-    ## [21] "Jazz"             "Rock"             "Ska"              "Comedy"          
-    ## [25] "Soul"             "Soundtrack"       "World"
+    ## # A tibble: 27 x 1
+    ##    `levels(spotify_clean$genre)`
+    ##    <chr>                        
+    ##  1 Movie                        
+    ##  2 R&B                          
+    ##  3 A Capella                    
+    ##  4 Alternative                  
+    ##  5 Country                      
+    ##  6 Dance                        
+    ##  7 Electronic                   
+    ##  8 Anime                        
+    ##  9 Folk                         
+    ## 10 Blues                        
+    ## # ... with 17 more rows
 
 ``` r
 # recode Children's Music genres as one
 levels(spotify_clean$genre)[levels(spotify_clean$genre) == "Children’s Music"] <- "Children's Music"
 
 # verify recoding of levels
-levels(spotify_clean$genre)
+tibble(levels(spotify_clean$genre))
 ```
 
-    ##  [1] "Movie"            "R&B"              "A Capella"        "Alternative"     
-    ##  [5] "Country"          "Dance"            "Electronic"       "Anime"           
-    ##  [9] "Folk"             "Blues"            "Opera"            "Hip-Hop"         
-    ## [13] "Children's Music" "Rap"              "Indie"            "Classical"       
-    ## [17] "Pop"              "Reggae"           "Reggaeton"        "Jazz"            
-    ## [21] "Rock"             "Ska"              "Comedy"           "Soul"            
-    ## [25] "Soundtrack"       "World"
+    ## # A tibble: 26 x 1
+    ##    `levels(spotify_clean$genre)`
+    ##    <chr>                        
+    ##  1 Movie                        
+    ##  2 R&B                          
+    ##  3 A Capella                    
+    ##  4 Alternative                  
+    ##  5 Country                      
+    ##  6 Dance                        
+    ##  7 Electronic                   
+    ##  8 Anime                        
+    ##  9 Folk                         
+    ## 10 Blues                        
+    ## # ... with 16 more rows
 
 Success! We can now continue with our cleaning process.
 
@@ -280,8 +312,8 @@ spotify_clean %>%
 ![](Spotify_Classification_files/figure-gfm/Numerical%20Features-1.jpeg)<!-- -->
 
 Based on the density plots above, `duration_min`, `instrumentalness`,
-`liveness`, `loudness`, `popularity`, and `speechiness` require further
-normalization.
+`liveness`, `loudness`, `popularity`, and `speechiness` require
+normalization to ensure a well distributed dataset.
 
 **Track Duration**
 
@@ -337,8 +369,6 @@ spotify_clean %>%
   ggplot(aes(x=log(instrumentalness), fill=genre)) +
   geom_density()
 ```
-
-    ## Warning: Removed 57791 rows containing non-finite values (stat_density).
 
 ![](Spotify_Classification_files/figure-gfm/Instrumentalness-2.jpeg)<!-- -->
 
