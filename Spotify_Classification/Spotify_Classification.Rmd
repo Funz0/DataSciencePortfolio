@@ -2,7 +2,9 @@
 title: "Spotify Predictive Analysis"
 author: "Alejandro Cepeda"
 date: "5/23/2022"
-output: github_document
+output: 
+  github_document:
+    dev: jpeg
 ---
 
 ***GRAMMAR CHECK ALL MARKDOWN TEXT BEFORE UPLOADING***
