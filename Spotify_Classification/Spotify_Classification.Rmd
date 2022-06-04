@@ -7,11 +7,13 @@ output: html_document
 
 ***GRAMMAR CHECK ALL MARKDOWN TEXT BEFORE UPLOADING***
 
-# Introduction
+## Context
 
 ![](spotify-logo.png)
 
-Music listening is one of my favorites pastimes and go-to therapy session to de-stress. From a very young age, I have always enjoyed diverse genres of music, which then prompted me to search for and discover new genres I may enjoy. That of course could be a hit or miss depending on what I discover. To combat the struggle of manually conducting searches for new or previously unknown genres of music, I ask the following question: **What determines a track's genre category?**. Knowing this may help me determine what makes a track enjoyable or not based on my own tastes and hopefully others who read this! To answer this, I downloaded a Spotify dataset from [Kaggle.com](https://www.kaggle.com/datasets/zaheenhamidani/ultimate-spotify-tracks-db), which was gathered using the Spotify API, mined and saved by Kaggle user Zaheen Hamidani. This dataset contains track information and the audio features associated with their respective track, sourced from Spotify's API [documentation](https://developer.spotify.com/documentation/web-api/reference/#/operations/get-audio-features):
+Music (listening and playing) is one of my favorites pastimes and go-to therapy session to de-stress. From a very young age, I have always enjoyed diverse genres of music, which then prompted me to search for and discover new genres I may enjoy. That of course could be a hit or miss depending on what I discover. To combat the struggle of manually conducting searches for new or previously unknown genres of music, I ask the following question: **What determines a track's genre category?**. Knowing this may help me determine what makes a track enjoyable or not based on my own tastes and hopefully others who read this! To answer this, I downloaded a Spotify dataset from [Kaggle.com](https://www.kaggle.com/datasets/zaheenhamidani/ultimate-spotify-tracks-db), which was gathered using the Spotify API, mined and saved by Kaggle user Zaheen Hamidani. This dataset contains track information and the audio features associated with their respective track, sourced from Spotify's API [documentation](https://developer.spotify.com/documentation/web-api/reference/#/operations/get-audio-features):
+
+## Data Description
 
 -   **genre**: Song genre
 -   **artist_name**: Song artist
@@ -44,13 +46,13 @@ library(corrplot)
 library(caret)
 ```
 
-```{r setup}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(include = FALSE)
 # setting global theme across all viz
 theme_set(theme_minimal())
 ```
 
-Let's read in the dataset from my current directory:
+Let's read in the dataset from the working directory:
 
 ```{r}
 # read in data
@@ -79,6 +81,21 @@ spotify_clean <- spotify %>%
   select(-duration_ms)
 ```
 
+Before proceeding any further, inspecting the genres within the dataset may be helpful in the case of a misleading genre being present.
+
+```{r}
+# ensure genres are properly written
+levels(spotify_clean$genre)
+
+# recode Children's Music genres as one
+levels(spotify_clean$genre)[levels(spotify_clean$genre) == "Children’s Music"] <- "Children's Music"
+
+# verify recoding of levels
+levels(spotify_clean$genre)
+```
+
+Success! We can now continue with our cleaning process.
+
 As the final step of the cleaning process, let's check for any missing values:
 
 ```{r}
@@ -90,71 +107,120 @@ Great news, 0 NAs were found!
 
 ## Exploratory Data Analysis
 
-Now that our data is clean, we can conduct some EDA and determine any further improvments to be made on the data as well as selecting the most appropiate features for the feature engineering and data modeling processes.
+Now that our data is clean, we can conduct some EDA and determine whether any further manipulation to be made on the data as well as selecting the most appropriate features for the models.
 
 ```{r}
-# create grouped genre table
-filtered_genre <- spotify_clean %>%
+# number of tracks per genre
+spotify_clean %>%
   group_by(genre) %>%
-  count() %>%
-  arrange(desc(genre)) %>%
-  # remove irrelevant and vague genres
-  filter(!genre %in% c("Movie","Children’s Music","Comedy","Soundtrack"))
+  count()
 
-# store filtered genres in a vector
-genre_list <- as.character(filtered_genre$genre)
-# drop temp table
-filtered_genre <- NULL
-
-# filter for genres in stored list
+# reorder variables
 spotify_clean <- spotify_clean %>%
-  filter(genre %in% genre_list) %>%
-  droplevels() %>% # drop unused levels
-  # reorder cat variables
+  # remove A Capella from data
+  filter(!genre %in% "A Capella") %>%
+  droplevels() %>%
   select(genre, key, mode, time_signature, everything())
 ```
 
-```{r, warning=FALSE, message=FALSE}
+### Numerical Features
+
+To ensure the data possesses proper center and spread, let's take a look at each possible features by genre. First let's visualize the distribution of each possible feature across all genres in the dataset:
+
+```{r "Numerical Features", warning=FALSE, message=FALSE}
 # store numeric variable names in a vector
 feature_names <- names(spotify_clean)[5:15]
 
 # density plot of numeric features by genre
 spotify_clean %>%
-  select(c("genre", feature_names)) %>%
+  select(c(genre, feature_names)) %>%
+  # convert data to long format based on features
   pivot_longer(cols = feature_names) %>%
-  ggplot(aes(x = value)) +
-  geom_density(aes(color = genre), alpha = 0.5) +
+  ggplot(aes(x = value, fill = genre)) +
+  geom_density() +
   facet_wrap(~name, ncol = 3, scales = "free") +
-  labs(title = "Spotify Audio Feature Density across Genres",
+  labs(title = "Spotify Audio Feature Density Across Genres",
        x = "", y = "density") +
-  theme(axis.text.y = element_blank())
-
+  theme(axis.text.x = element_text(size = 8, angle = 40),
+        axis.text.y = element_blank())
 ```
 
-```{r}
-# find duration outliers
+Based on the density plots above, `duration_min`, `instrumentalness`, `liveness`, `loudness`, `popularity`, and `speechiness` require further normalization.
+
+**Track Duration**
+
+```{r "Track Duration"}
+# look for outliers
 spotify_clean %>%
   ggplot(aes(y = duration_min)) +
-  geom_boxplot(coef = 4) +
+  geom_boxplot() + 
   coord_flip() +
-  labs(title = "Duration (in minutes)")
+  ggtitle("Duration (in minutes)")
 
-# store outliers within duration_min
+# store outliers based on 4th whisker
 duration_outliers <- boxplot(spotify_clean$duration_min, 
                              plot = FALSE, range = 4)$out
+
 # remove outliers
 spotify_clean <- spotify_clean %>%
   filter(!duration_min %in% duration_outliers)
 
-# verify outliers are removed
 spotify_clean %>%
   ggplot(aes(y = duration_min)) +
-  geom_boxplot(coef = 4) +
+  geom_boxplot() + 
   coord_flip() +
-  labs(title = "Duration (in minutes), no outliers")
+  ggtitle("Duration(in minutes) - no outliers")
 ```
 
+**Instrumentalness**
+
+```{r "Instrumentalness"}
+# find duration outliers
+spotify_clean %>%
+  ggplot(aes(y = instrumentalness)) +
+  geom_boxplot() +
+  coord_flip() +
+  ggtitle("Instrumentalness")
+
+# determine number of genres with no instrumentalness
+no_instrument <- spotify_clean %>%
+  summarize(sum(instrumentalness == 0))
+
+# look at genres with 0 instrumentalness
+spotify_clean %>%
+  ggplot(aes(x=log(instrumentalness), fill=genre)) +
+  geom_density()
+```
+
+After the analysis above, the option I believe to be most useful to the model performance is to remove this feature altogether as there are quite a large number of tracks with 0 `instrumentalness` detected. I also stored the values within the data with no instruments detected and will determine later if the 57791 tracks are worth dropping to have `instrumentalness` as a predictor variable for the models. This will be determined during the [correlation](#correlation) step.
+
 ```{r}
+# drop instrumentalness
+spotify_clean <- spotify_clean %>%
+  select(-instrumentalness)
+```
+
+**Liveness**
+
+```{r "Liveness"}
+
+```
+
+**Loudness**
+
+```{r "Loudness"}
+
+```
+
+**Popularity**
+
+```{r "Popularity"}
+
+```
+
+**Speechiness**
+
+```{r "Speechiness"}
 # find speechiness outliers
 spotify_clean %>%
   ggplot(aes(y = speechiness)) +
@@ -177,7 +243,9 @@ spotify_clean %>%
   labs(title = "Speechiness, less outliers")
 ```
 
-```{r}
+### Categorical Features
+
+```{r "Categorical Features"}
 # categorical variable distribution
 genre_bar <- ggplot(spotify_clean)
 # key
@@ -189,17 +257,38 @@ genre_bar + geom_bar(aes(time_signature))
 
 ```
 
+**Key**
+
+```{r "Key"}
+
+```
+
+**Mode**
+
+```{r "Mode"}
+
+```
+
+**Time Signature**
+
+```{r "Time Signature"}
+
+```
+
 ```{r}
 # drop mode and time signature (too biased/vague)
 spotify_clean <- spotify_clean %>%
   select(-c(mode, time_signature))
 ```
 
-```{r}
+### Correlation {#correlation}
+
+...
+
+```{r "Correlation"}
 
 spotify_clean %>%
   select(feature_names) %>%
-  scale() %>%
   cor() %>%
   corrplot(method="color", type="upper",
            tl.col = "black", tl.cex=0.9, tl.srt=45)
@@ -225,11 +314,17 @@ spotify_test <- spotify_final[-index,]
 ctrl <- trainControl(method="cv", number=10, verboseIter=FALSE)
 ```
 
-## Model Training/Validation
+## Modeling
+
+### Nearest Neighbors
+
+```{r "Nearest Neighbors"}
+
+```
 
 ### Random Forest
 
-```{r}
+```{r "Random Forest"}
 set.seed(123)
 # random forest model
 rf_model <- ranger(genre~.,
@@ -265,7 +360,7 @@ rf_cm
 
 ### Gradient Boosting
 
-```{r}
+```{r "Gradient Boosting"}
 library(gbm)
 set.seed(123)
 # training gb model with cv
@@ -297,7 +392,7 @@ print(gbm_cm)
 
 ### Model Comparison
 
-```{r}
+```{r "Model Comparison"}
 # test variable importance by model
 ggarrange(rf_varImp, gbm_varImp, gbm2_varImp,
           widths=c(0.5,0.5,0.5), heights=c(0.5,0.5,0.5), nrow=3)
