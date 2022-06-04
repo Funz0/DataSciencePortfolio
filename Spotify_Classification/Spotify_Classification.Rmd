@@ -50,7 +50,7 @@ library(caret)
 
 ```{r setup, include=FALSE}
 # setting global theme across all viz
-theme_set(theme_minimal())
+theme_set(theme_dark())
 ```
 
 Let's read in the dataset from the working directory:
@@ -58,7 +58,7 @@ Let's read in the dataset from the working directory:
 ```{r}
 # read in data
 spotify <- read_csv("SpotifyFeatures.csv", show_col_types = FALSE)
-glimpse(spotify)
+tibble(glimpse(spotify))
 ```
 
 ## Data Preparation
@@ -86,13 +86,13 @@ Before proceeding any further, inspecting the genres within the dataset may be h
 
 ```{r}
 # ensure genres are properly written
-levels(spotify_clean$genre)
+tibble(levels(spotify_clean$genre))
 
 # recode Children's Music genres as one
 levels(spotify_clean$genre)[levels(spotify_clean$genre) == "Children’s Music"] <- "Children's Music"
 
 # verify recoding of levels
-levels(spotify_clean$genre)
+tibble(levels(spotify_clean$genre))
 ```
 
 Success! We can now continue with our cleaning process.
@@ -146,7 +146,7 @@ spotify_clean %>%
         axis.text.y = element_blank())
 ```
 
-Based on the density plots above, `duration_min`, `instrumentalness`, `liveness`, `loudness`, `popularity`, and `speechiness` require further normalization.
+Based on the density plots above, `duration_min`, `instrumentalness`, `liveness`, `loudness`, `popularity`, and `speechiness` require normalization to ensure a well distributed dataset.
 
 **Track Duration**
 
@@ -175,7 +175,7 @@ spotify_clean %>%
 
 **Instrumentalness**
 
-```{r "Instrumentalness"}
+```{r "Instrumentalness", warning=FALSE}
 # find duration outliers
 spotify_clean %>%
   ggplot(aes(y = instrumentalness)) +
