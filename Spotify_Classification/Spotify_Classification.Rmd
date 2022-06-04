@@ -2,7 +2,7 @@
 title: "Spotify Predictive Analysis"
 author: "Alejandro Cepeda"
 date: "5/23/2022"
-output: rmarkdown::github_document
+output: github_document
 ---
 
 ***GRAMMAR CHECK ALL MARKDOWN TEXT BEFORE UPLOADING***
@@ -47,7 +47,6 @@ library(caret)
 ```
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(include = FALSE)
 # setting global theme across all viz
 theme_set(theme_minimal())
 ```
