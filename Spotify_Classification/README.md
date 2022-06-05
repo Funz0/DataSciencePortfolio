@@ -97,8 +97,8 @@ The following are the packages used throughout this project:
 # libraries
 library(tidyverse)
 library(corrplot)
-
 library(caret)
+library(randomForest)
 ```
 
 Let’s read in the dataset from the working directory:
@@ -106,7 +106,7 @@ Let’s read in the dataset from the working directory:
 ``` r
 # read in data
 spotify <- read_csv("SpotifyFeatures.csv", show_col_types = FALSE)
-tibble(glimpse(spotify))
+glimpse(spotify)
 ```
 
     ## Rows: 232,725
@@ -130,38 +130,16 @@ tibble(glimpse(spotify))
     ## $ time_signature   <chr> "4/4", "4/4", "5/4", "4/4", "4/4", "4/4", "4/4", "4/4~
     ## $ valence          <dbl> 0.8140, 0.8160, 0.3680, 0.2270, 0.3900, 0.3580, 0.533~
 
-    ## # A tibble: 232,725 x 18
-    ##    genre artist_name    track_name track_id popularity acousticness danceability
-    ##    <chr> <chr>          <chr>      <chr>         <dbl>        <dbl>        <dbl>
-    ##  1 Movie Henri Salvador C'est bea~ 0BRjO6g~          0      0.611          0.389
-    ##  2 Movie Martin & les ~ Perdu d'a~ 0BjC1Nf~          1      0.246          0.59 
-    ##  3 Movie Joseph Willia~ Don't Let~ 0CoSDzo~          3      0.952          0.663
-    ##  4 Movie Henri Salvador Dis-moi M~ 0Gc6TVm~          0      0.703          0.24 
-    ##  5 Movie Fabien Nataf   Ouverture  0IuslXp~          4      0.95           0.331
-    ##  6 Movie Henri Salvador Le petit ~ 0Mf1jKa~          0      0.749          0.578
-    ##  7 Movie Martin & les ~ Premières~ 0NUiKYR~          2      0.344          0.703
-    ##  8 Movie Laura Mayne    Let Me Le~ 0PbIF9Y~         15      0.939          0.416
-    ##  9 Movie Chorus         Helka      0ST6uPf~          0      0.00104        0.734
-    ## 10 Movie Le Club des J~ Les bisou~ 0VSqZ3K~         10      0.319          0.598
-    ## # ... with 232,715 more rows, and 11 more variables: duration_ms <dbl>,
-    ## #   energy <dbl>, instrumentalness <dbl>, key <chr>, liveness <dbl>,
-    ## #   loudness <dbl>, mode <chr>, speechiness <dbl>, tempo <dbl>,
-    ## #   time_signature <chr>, valence <dbl>
-
 ## Data Preparation
 
 Prior to conducting EDA, there is already some preexisting knowledge
-regarding the variables within the dataset. Since this data was gathered
-using an API, it is always a good practice to check for duplicate
-observations (or rows) to ensure uniformity. The variables
+regarding the variables within the dataframe. Since this data was
+gathered using an API, it is always a good practice to check for
+duplicate observations (or rows) to ensure uniformity. The variables
 `artist_name`, `track_name`, and `track_id` will not be needed for the
 purpose of this project, thus the best course of action may be to remove
-them. Additionally, there are variables such as `genre`, `key`, `mode`,
-and `time_signature` that may be best treated as **multi-level**
-variables, meaning that each observation of the aforementioned variables
-have defined categories throughout the dataset. To conduct all of these
-data cleaning steps, I created a pipeline using the dplyr’s `%>%`
-operator (loaded from the tidyverse package).
+them. To conduct all of these data cleaning steps, I created a pipeline
+using the dplyr’s `%>%` operator (loaded from the tidyverse package).
 
 ``` r
 # pipeline to clean, drop and reformat variables
@@ -172,59 +150,62 @@ spotify_clean <- spotify %>%
   select(-c(artist_name, track_name, track_id)) %>%
   # convert character variables to factor
   mutate(genre = as_factor(genre),
-         key = as_factor(key),
-         mode = as_factor(mode),
          time_signature = as_factor(time_signature),
          # convert duration to minutes instead
          duration_min = duration_ms/60000) %>%
   select(-duration_ms)
 ```
 
-Before proceeding any further, inspecting the genres within the dataset
-may be helpful in the case of a misleading genre being present.
+Based on prior musical knowledge (guitar and percussion classes), I
+decided it is best to exclude `key`, `mode`, and `time_signature` from
+the dataframe as they do not properly distinguish a genre as their
+measurements often overlap, regardless of how a track sounds. The key,
+as described in the [data description](#description), measures the pitch
+the track was recorded in, which often only changes how high or low the
+pitch will sound. The mode, labelled as either major or minor, may not
+be specific enough for the classification models to properly
+differentiate one from the other to predict a music genre. Time
+signature will be used for further analysis as the tempo in which a
+track is played may be useful for classifying a genre.
+
+``` r
+# drop mode and time signature
+spotify_clean <- spotify_clean %>%
+  select(-c(key, mode))
+```
+
+Before proceeding any further, inspecting the genres within the
+dataframe may be helpful in the case of a misleading genre being
+present.
 
 ``` r
 # ensure genres are properly written
-tibble(levels(spotify_clean$genre))
+levels(spotify_clean$genre)
 ```
 
-    ## # A tibble: 27 x 1
-    ##    `levels(spotify_clean$genre)`
-    ##    <chr>                        
-    ##  1 Movie                        
-    ##  2 R&B                          
-    ##  3 A Capella                    
-    ##  4 Alternative                  
-    ##  5 Country                      
-    ##  6 Dance                        
-    ##  7 Electronic                   
-    ##  8 Anime                        
-    ##  9 Folk                         
-    ## 10 Blues                        
-    ## # ... with 17 more rows
+    ##  [1] "Movie"            "R&B"              "A Capella"        "Alternative"     
+    ##  [5] "Country"          "Dance"            "Electronic"       "Anime"           
+    ##  [9] "Folk"             "Blues"            "Opera"            "Hip-Hop"         
+    ## [13] "Children's Music" "Children’s Music" "Rap"              "Indie"           
+    ## [17] "Classical"        "Pop"              "Reggae"           "Reggaeton"       
+    ## [21] "Jazz"             "Rock"             "Ska"              "Comedy"          
+    ## [25] "Soul"             "Soundtrack"       "World"
 
 ``` r
 # recode Children's Music genres as one
 levels(spotify_clean$genre)[levels(spotify_clean$genre) == "Children’s Music"] <- "Children's Music"
 
 # verify recoding of levels
-tibble(levels(spotify_clean$genre))
+levels(spotify_clean$genre)
 ```
 
-    ## # A tibble: 26 x 1
-    ##    `levels(spotify_clean$genre)`
-    ##    <chr>                        
-    ##  1 Movie                        
-    ##  2 R&B                          
-    ##  3 A Capella                    
-    ##  4 Alternative                  
-    ##  5 Country                      
-    ##  6 Dance                        
-    ##  7 Electronic                   
-    ##  8 Anime                        
-    ##  9 Folk                         
-    ## 10 Blues                        
-    ## # ... with 16 more rows
+    ##  [1] "Movie"            "R&B"              "A Capella"        "Alternative"     
+    ##  [5] "Country"          "Dance"            "Electronic"       "Anime"           
+    ##  [9] "Folk"             "Blues"            "Opera"            "Hip-Hop"         
+    ## [13] "Children's Music" "Rap"              "Indie"            "Classical"       
+    ## [17] "Pop"              "Reggae"           "Reggaeton"        "Jazz"            
+    ## [21] "Rock"             "Ska"              "Comedy"           "Soul"            
+    ## [25] "Soundtrack"       "World"
 
 Success! We can now continue with our cleaning process.
 
@@ -238,12 +219,12 @@ colSums(is.na(spotify_clean))
 
     ##            genre       popularity     acousticness     danceability 
     ##                0                0                0                0 
-    ##           energy instrumentalness              key         liveness 
+    ##           energy instrumentalness         liveness         loudness 
     ##                0                0                0                0 
-    ##         loudness             mode      speechiness            tempo 
+    ##      speechiness            tempo   time_signature          valence 
     ##                0                0                0                0 
-    ##   time_signature          valence     duration_min 
-    ##                0                0                0
+    ##     duration_min 
+    ##                0
 
 Great news, 0 NAs were found!
 
@@ -282,18 +263,19 @@ spotify_clean <- spotify_clean %>%
   # remove A Capella from data
   filter(!genre %in% "A Capella") %>%
   droplevels() %>%
-  select(genre, key, mode, time_signature, everything())
+  select(genre, time_signature, everything())
 ```
 
 ### Numerical Features
 
 To ensure the data possesses proper center and spread, let’s take a look
 at each possible features by genre. First let’s visualize the
-distribution of each possible feature across all genres in the dataset:
+distribution of each possible feature across all genres in the
+dataframe:
 
 ``` r
 # store numeric variable names in a vector
-feature_names <- names(spotify_clean)[5:15]
+feature_names <- names(spotify_clean)[3:13]
 
 # density plot of numeric features by genre
 spotify_clean %>%
@@ -312,8 +294,8 @@ spotify_clean %>%
 ![](Spotify_Classification_files/figure-gfm/Numerical%20Features-1.jpeg)<!-- -->
 
 Based on the density plots above, `duration_min`, `instrumentalness`,
-`liveness`, `loudness`, `popularity`, and `speechiness` require
-normalization to ensure a well distributed dataset.
+and `loudness` require normalization to ensure a well distributed
+dataframe.
 
 **Track Duration**
 
@@ -326,7 +308,7 @@ spotify_clean %>%
   ggtitle("Duration (in minutes)")
 ```
 
-![](Spotify_Classification_files/figure-gfm/Track%20Duration-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-8-1.jpeg)<!-- -->
 
 ``` r
 # store outliers based on 4th whisker
@@ -344,12 +326,12 @@ spotify_clean %>%
   ggtitle("Duration(in minutes) - no outliers")
 ```
 
-![](Spotify_Classification_files/figure-gfm/Track%20Duration-2.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-8-2.jpeg)<!-- -->
 
 **Instrumentalness**
 
 ``` r
-# find duration outliers
+# look for outliers
 spotify_clean %>%
   ggplot(aes(y = instrumentalness)) +
   geom_boxplot() +
@@ -357,28 +339,32 @@ spotify_clean %>%
   ggtitle("Instrumentalness")
 ```
 
-![](Spotify_Classification_files/figure-gfm/Instrumentalness-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-9-1.jpeg)<!-- -->
 
 ``` r
-# determine number of genres with no instrumentalness
-no_instrument <- spotify_clean %>%
-  summarize(sum(instrumentalness == 0))
-
-# look at genres with 0 instrumentalness
+# visualize number of genres with no instrumentalness
 spotify_clean %>%
-  ggplot(aes(x=log(instrumentalness), fill=genre)) +
-  geom_density()
+  mutate(zero = instrumentalness == 0) %>%
+  ggplot(aes(x=zero, fill=genre)) +
+  geom_bar()
 ```
 
-![](Spotify_Classification_files/figure-gfm/Instrumentalness-2.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-9-2.jpeg)<!-- -->
+
+``` r
+# store tracks with 0 instrumentalness in a separate df
+with_instrument <- spotify_clean %>%
+  filter(instrumentalness != 0)
+```
 
 After the analysis above, the option I believe to be most useful to the
 model performance is to remove this feature altogether as there are
-quite a large number of tracks with 0 `instrumentalness` detected. I
-also stored the values within the data with no instruments detected and
-will determine later if the 57791 tracks are worth dropping to have
-`instrumentalness` as a predictor variable for the models. This will be
-determined during the [correlation](#correlation) step.
+quite a large number of tracks with 0 `instrumentalness` detected, which
+is spread across all genres. I also stored the values within the data
+with no instruments detected and will determine later if the 57791
+tracks are worth dropping to have `instrumentalness` as a predictor
+variable for the models. This will be determined during the
+[correlation](#correlation) step.
 
 ``` r
 # drop instrumentalness
@@ -386,110 +372,74 @@ spotify_clean <- spotify_clean %>%
   select(-instrumentalness)
 ```
 
-**Liveness**
-
 **Loudness**
 
-**Popularity**
-
-**Speechiness**
-
 ``` r
-# find speechiness outliers
+# look for outliers
 spotify_clean %>%
-  ggplot(aes(y = speechiness)) +
-  geom_boxplot(coef = 4) +
+  ggplot(aes(y = loudness)) +
+  geom_boxplot() +
   coord_flip() +
-  labs(title = "Speechiness")
+  ggtitle("Loudness")
 ```
 
-![](Spotify_Classification_files/figure-gfm/Speechiness-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-11-1.jpeg)<!-- -->
 
 ``` r
-# store outliers within duration_min
-speechiness_outliers <- boxplot(spotify_clean$speechiness, 
-                             plot = FALSE, range = 4)$out
-# remove outliers
+# remove outlier
 spotify_clean <- spotify_clean %>%
-  filter(!speechiness %in% speechiness_outliers)
+  filter(loudness > -30)
 
-# verify outliers are removed
+# boxplot without outlier
 spotify_clean %>%
-  ggplot(aes(y = speechiness)) +
-  geom_boxplot(coef = 4) +
+  ggplot(aes(y = loudness)) +
+  geom_boxplot() +
   coord_flip() +
-  labs(title = "Speechiness, less outliers")
+  ggtitle("Loudness - no outliers")
 ```
 
-![](Spotify_Classification_files/figure-gfm/Speechiness-2.jpeg)<!-- -->
-
-### Categorical Features
-
-``` r
-# categorical variable distribution
-genre_bar <- ggplot(spotify_clean)
-# key
-genre_bar + geom_bar(aes(key)) 
-```
-
-![](Spotify_Classification_files/figure-gfm/Categorical%20Features-1.jpeg)<!-- -->
-
-``` r
-# mode
-genre_bar + geom_bar(aes(mode))
-```
-
-![](Spotify_Classification_files/figure-gfm/Categorical%20Features-2.jpeg)<!-- -->
-
-``` r
-# time_signature
-genre_bar + geom_bar(aes(time_signature))
-```
-
-![](Spotify_Classification_files/figure-gfm/Categorical%20Features-3.jpeg)<!-- -->
-
-**Key**
-
-**Mode**
-
-**Time Signature**
-
-``` r
-# drop mode and time signature (too biased/vague)
-spotify_clean <- spotify_clean %>%
-  select(-c(mode, time_signature))
-```
-
-#### One-Hot Encoding
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-11-2.jpeg)<!-- -->
 
 ### Correlation
 
-…
+The final step prior to the modeling process is to find any features to
+exclude with the help of a visualization of the correlations across all
+numerical features. What we are looking for here are associations
+between the features so any bias between multiple variables are avoided
+when training and testing our model.
 
 ``` r
-# correlation plot of numerical features (add categorical once encoding is done)
+# correlation plot of numeric features
 spotify_clean %>%
-  select(feature_names) %>%
+  select(-c(genre,time_signature)) %>% 
   cor() %>%
-  corrplot(method="color", type="upper",
+  corrplot(method="number", type="upper", diag=FALSE,
            tl.col = "black", tl.cex=0.9, tl.srt=45)
 ```
 
+Loudness and energy possess the highest positive correlation (0.83),
+therefore one must go in order to avoid prediction bias. Since `energy`
+is much more evenly distributed compared to `loudness`, the latter will
+be dropped from the final version of the full data frame.
+
 ``` r
-# remove loudness (highest positive & 2nd highest negative corr)
-spotify_clean$loudness <- NULL
+# remove loudness
+spotify_final <- spotify_clean %>%
+  select(-loudness)
 ```
 
-## Feature Engineering
-
-### Train/Test Split
+## Train/Test Split
 
 ``` r
+# scale numeric features
+features_scaled <- spotify_final %>%
+  mutate_if(is.numeric, scale)
+
 # creating index and creating train/test split
 set.seed(123)
-index <- createDataPartition(spotify_final$genre, p=0.70, list=FALSE)
-spotify_train <- spotify_final[index,]
-spotify_test <- spotify_final[-index,]
+index <- createDataPartition(spotify_final$genre, p=0.75, list=FALSE)
+spotify_train <- features_scaled[index,]
+spotify_test <- features_scaled[-index,]
 
 # training control for models
 ctrl <- trainControl(method="cv", number=10, verboseIter=FALSE)
@@ -504,30 +454,18 @@ ctrl <- trainControl(method="cv", number=10, verboseIter=FALSE)
 ``` r
 set.seed(123)
 # random forest model
-rf_model <- ranger(genre~.,
-                   spotify_train,
-                   importance="impurity",
-                   verbose=0)
+rf_model <- randomForest(genre~., spotify_train)
 rf_model
-# storing best tunegrid params
-tunegrid_rf <- expand.grid(mtry=rf_model$mtry, splitrule=rf_model$splitrule, min.node.size=rf_model$min.node.size)
-# train rf model w 10 fold cv
-rf_train <- train(track_genre~., 
-                  spotify_train, 
-                  method="ranger", 
-                  tuneGrid=tunegrid_rf, 
-                  trControl=ctrl)
+
+rf_train <- train()
+
 print(rf_train)
+
 # training confusion matrix
 confusionMatrix(rf_train$finalModel$predictions, spotify_train$track_genre)
 
 # compute accuracy on test set
-rf_pred <- predict(rf_train, newdata=spotify_test)
-summary(rf_pred)
-# test pred confusion matrix
-rf_cm <- confusionMatrix(rf_pred, spotify_test$track_genre)
-rf_cm
-# RF used a lot of memory (~300MB)
+
 
 # plot results with "vip" package
 (rf_varImp<- vip(rf_model, geom="point", horizontal=FALSE,
@@ -536,36 +474,6 @@ rf_cm
 ```
 
 ### Gradient Boosting
-
-``` r
-library(gbm)
-set.seed(123)
-# training gb model with cv
-gbm_model <- train(track_genre~., 
-                   spotify_train,
-                   method="gbm",
-                   trControl=ctrl,
-                   verbose=0)
-print(gbm_model)
-# train set predictions
-gbm_train_pred <- predict(gbm_model)
-gbm_train_result <- data.frame(spotify_train$track_genre, gbm_train_pred)
-# training confusion matrix
-gbm_train_cm <- confusionMatrix(spotify_train$track_genre, as.factor(gbm_train_pred))
-print(gbm_train_cm)
-# test set predictions
-gbm_pred <- predict(gbm_model, newdata=spotify_test)
-gbm_result <- data.frame(spotify_test$track_genre, gbm_pred)
-# computing confusion matrix on test preds
-gbm_cm <- confusionMatrix(spotify_test$track_genre, as.factor(gbm_pred))
-print(gbm_cm)
-# less memory usage (~20MB) but worse acc
-
-# gbm variable importance
-(gbm_varImp <- vip(gbm_model, geom="point", horizontal=FALSE,
-                 aes=list(color="blue", shape=17, size=5)) +
-                 theme_light())
-```
 
 ### Model Comparison
 
