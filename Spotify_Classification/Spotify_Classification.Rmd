@@ -130,7 +130,7 @@ spotify_clean <- spotify_clean %>%
   select(genre, time_signature, everything())
 ```
 
-### Numerical Features
+### Feature Analysis/Engineering
 
 To ensure the data possesses proper center and spread, let's take a look at each possible features by genre. First let's visualize the distribution of each possible feature across all genres in the dataframe:
 
@@ -189,22 +189,22 @@ spotify_clean %>%
   coord_flip() +
   ggtitle("Instrumentalness")
 
-# visualize number of genres with no instrumentalness
+# compare data w/ and w/o instrumentalness > 0
 spotify_clean %>%
-  mutate(zero = instrumentalness == 0) %>%
-  ggplot(aes(x=zero, fill=genre)) +
-  geom_bar()
+  filter(instrumentalness > 0.1) %>%
+  ggplot(aes(y = instrumentalness)) +
+  geom_boxplot() +
+  coord_flip()
 
-# store tracks with 0 instrumentalness in a separate df
-with_instrument <- spotify_clean %>%
-  filter(instrumentalness != 0)
-
+# add all tracks w/o instrumentalness by genre
+spotify_clean %>% 
+  group_by(genre) %>%
+  summarize(sum(instrumentalness == 0))
 ```
 
-After the analysis above, the option I believe to be most useful to the model performance is to remove this feature altogether as there are quite a large number of tracks with 0 `instrumentalness` detected, which is spread across all genres. I also stored the values within the data with no instruments detected and will determine later if the 57791 tracks are worth dropping to have `instrumentalness` as a predictor variable for the models. This will be determined during the [correlation](#correlation) step.
+From the yielded results above, I will remove `instrumentalness` as a predictor variable due to the little influence it shows in terms of classifying a genre.
 
 ```{r}
-# drop instrumentalness
 spotify_clean <- spotify_clean %>%
   select(-instrumentalness)
 ```
@@ -231,6 +231,23 @@ spotify_clean %>%
   ggtitle("Loudness - no outliers")
 ```
 
+**Time Signature**
+
+```{r}
+# plot time_signature distribution
+spotify_clean %>%
+  ggplot(aes(x=time_signature)) +
+  geom_bar()
+```
+
+As can be seen in the plot above, a substantial number of tracks were recorded to be in `4/4` meter, which can cause great bias during the model training process. Based on inference and industry knowledge, I will remove `time_signature` from the dataframe. 
+
+```{r}
+# drop time_signature
+spotify_clean <- spotify_clean %>%
+  select(-time_signature)
+```
+
 ### Correlation {#correlation}
 
 The final step prior to the modeling process is to find any features to exclude with the help of a visualization of the correlations across all numerical features. What we are looking for here are associations between the features so any bias between multiple variables are avoided when training and testing our model.
@@ -238,7 +255,7 @@ The final step prior to the modeling process is to find any features to exclude 
 ```{r "Correlation", eval=FALSE}
 # correlation plot of numeric features
 spotify_clean %>%
-  select(-c(genre,time_signature)) %>% 
+  select(-c(genre)) %>% 
   cor() %>%
   corrplot(method="number", type="upper", diag=FALSE,
            tl.col = "black", tl.cex=0.9, tl.srt=45)
