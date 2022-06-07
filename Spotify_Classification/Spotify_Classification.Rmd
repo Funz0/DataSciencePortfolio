@@ -120,12 +120,13 @@ Now that our data is clean, we can conduct some EDA and determine whether any fu
 # number of tracks per genre
 spotify_clean %>%
   group_by(genre) %>%
-  count()
+  count() %>%
+  arrange(n)
 
 # reorder variables
 spotify_clean <- spotify_clean %>%
   # remove A Capella from data
-  filter(!genre %in% "A Capella") %>%
+  filter(!genre %in% c("A Capella","Anime","Children's Music","Movie","Soundtrack","World")) %>%
   droplevels() %>%
   select(genre, time_signature, everything())
 ```
@@ -134,7 +135,7 @@ spotify_clean <- spotify_clean %>%
 
 To ensure the data possesses proper center and spread, let's take a look at each possible features by genre. First let's visualize the distribution of each possible feature across all genres in the dataframe:
 
-```{r "Numerical Features", warning=FALSE, message=FALSE}
+```{r, warning=FALSE, message=FALSE}
 # store numeric variable names in a vector
 feature_names <- names(spotify_clean)[3:13]
 
@@ -149,7 +150,10 @@ spotify_clean %>%
   labs(title = "Spotify Audio Feature Density Across Genres",
        x = "", y = "density") +
   theme(axis.text.x = element_text(size = 8, angle = 40),
-        axis.text.y = element_blank())
+        axis.text.y = element_blank(),
+        legend.title = element_text(size=10),
+        legend.key.size = unit(5, "mm"),
+        legend.text = element_text(size=8))
 ```
 
 Based on the density plots above, `duration_min`, `instrumentalness`, and `loudness` require normalization to ensure a well distributed dataframe.
@@ -219,9 +223,10 @@ spotify_clean %>%
   coord_flip() +
   ggtitle("Loudness")
 
-# remove outlier
+
+# remove outliers
 spotify_clean <- spotify_clean %>%
-  filter(loudness > -30)
+  filter(loudness < max(loudness))
 
 # boxplot without outlier
 spotify_clean %>%
@@ -252,7 +257,7 @@ spotify_clean <- spotify_clean %>%
 
 The final step prior to the modeling process is to find any features to exclude with the help of a visualization of the correlations across all numerical features. What we are looking for here are associations between the features so any bias between multiple variables are avoided when training and testing our model.
 
-```{r "Correlation", eval=FALSE}
+```{r}
 # correlation plot of numeric features
 spotify_clean %>%
   select(-c(genre)) %>% 
@@ -260,7 +265,7 @@ spotify_clean %>%
   corrplot(method="number", type="upper", diag=FALSE,
            tl.col = "black", tl.cex=0.9, tl.srt=45)
 ```
-Loudness and energy possess the highest positive correlation (0.83), therefore one must go in order to avoid prediction bias. Since `energy` is much more evenly distributed compared to `loudness`, the latter will be dropped from the final version of the full data frame.
+Loudness and energy possess the highest positive correlation (0.81), therefore one must go in order to avoid prediction bias. Since `energy` is much more evenly distributed compared to `loudness`, the latter will be dropped from the final version of the full data frame.
 
 ```{r}
 # remove loudness
@@ -272,19 +277,15 @@ spotify_final <- spotify_clean %>%
 
 
 
-```{r "Train/Test Split", eval=FALSE}
-# scale numeric features
-features_scaled <- spotify_final %>%
-  mutate_if(is.numeric, scale)
-
+```{r}
 # creating index and creating train/test split
 set.seed(123)
-index <- createDataPartition(spotify_final$genre, p=0.75, list=FALSE)
-spotify_train <- features_scaled[index,]
-spotify_test <- features_scaled[-index,]
+index <- createDataPartition(spotify_final$genre, p=0.80, list=FALSE)
+spotify_train <- spotify_final[index,]
+spotify_test <- spotify_final[-index,]
 
 # training control for models
-ctrl <- trainControl(method="cv", number=10, verboseIter=FALSE)
+ctrl <- trainControl(method="cv", number=10)
 ```
 
 ## Modeling
@@ -293,48 +294,129 @@ ctrl <- trainControl(method="cv", number=10, verboseIter=FALSE)
 
 ### Nearest Neighbors
 
-```{r "Nearest Neighbors", eval=FALSE}
+```{r, eval=FALSE}
+# build training model
+knn_model <- train(genre~., spotify_train, 
+                   method="knn",
+                   trControl=trainControl(method="none"),
+                   preProcess=c("center","scale"))
+knn_model
 
+# build cv model
+knn_cv <- train(genre~., spotify_train, 
+                   method="knn",
+                   trControl=ctrl,
+                   preProcess=c("center","scale"))
+knn_cv
+```
+
+**Predictions**
+
+```{r, eval=FALSE}
+# predict on models
+knn_train_pred <- predict(knn_model, spotify_train) # train set
+knn_test_pred <- predict(knn_model, spotify_test) # test set
+knn_cv_pred <- predict(knn_cv, spotify_train) # cv
+```
+
+**Model Performance**
+
+```{r, eval=FALSE}
+# knn confusion matrices
+knn_train_cm <- confusionMatrix(knn_train_pred, spotify_train$genre) # train set
+knn_test_cm <- confusionMatrix(knn_test_pred, spotify_test$genre) # test set
+knn_cv_cm <- confusionMatrix(knn_cv_pred, spotify_train$genre) # cv
+
+# compare performances
+print(knn_train_cm)
+print(knn_test_cm)
+print(knn_cv_cm)
 ```
 
 ### Random Forest
 
-```{r "Random Forest", eval=FALSE}
-set.seed(123)
-# random forest model
-rf_model <- randomForest(genre~., spotify_train)
+```{r, eval=FALSE}
+# build training model
+rf_model <- train(genre~., spotify_train, 
+                   method="rf",
+                   trControl=trainControl(method="none"),
+                   preProcess=c("center","scale"))
 rf_model
 
-rf_train <- train()
+# build cv model
+rf_cv <- train(genre~., spotify_train, 
+                   method="rf",
+                   trControl=ctrl,
+                   preProcess=c("center","scale"))
+rf_cv
+```
 
-print(rf_train)
+**Predictions**
 
-# training confusion matrix
-confusionMatrix(rf_train$finalModel$predictions, spotify_train$track_genre)
+```{r, eval=FALSE}
+# predict on models
+rf_train_pred <- predict(rf_model, spotify_train) # train set
+rf_test_pred <- predict(rf_model, spotify_test) # test set
+rf_cv_pred <- predict(rf_cv, spotify_train) # cv 
+```
 
-# compute accuracy on test set
+**Model Performance**
 
+```{r, eval=FALSE}
+# random forest confusion matrices
+rf_train_cm <- confusionMatrix(rf_train_pred, spotify_train$genre) # train set
+rf_test_cm <- confusionMatrix(rf_test_pred, spotify_test$genre) # test set
+rf_cv_cm <- confusionMatrix(rf_cv_pred, spotify_train$genre) # cv
 
-# plot results with "vip" package
-(rf_varImp<- vip(rf_model, geom="point", horizontal=FALSE,
-              aes=list(color="blue", shape=17, size=5)) +
-              theme_light())
+# compare performances
+print(rf_train_cm)
+print(rf_test_cm)
+print(rf_cv_cm)
 ```
 
 ### Gradient Boosting
 
-```{r "Gradient Boosting", eval=FALSE}
+```{r, eval=FALSE}
+# build training model
+gbm_model <- train(genre~., spotify_train, 
+                   method="gbm",
+                   trControl=trainControl(method="none"),
+                   preProcess=c("center","scale"))
+gbm_model
 
+# build cv model
+gbm_cv <- train(genre~., spotify_train, 
+                   method="gbm",
+                   trControl=ctrl,
+                   preProcess=c("center","scale"))
+gbm_cv
 ```
 
-### Model Comparison
+**Predictions**
 
-```{r "Model Comparison", eval=FALSE}
-# test variable importance by model
-ggarrange(rf_varImp, gbm_varImp, gbm2_varImp,
-          widths=c(0.5,0.5,0.5), heights=c(0.5,0.5,0.5), nrow=3)
-# test confusion matrix by model
-kable(rf_cm$table)
-kable(gbm_cm$table)
-kable(gbm2_cm$table)
+```{r, eval=FALSE}
+# predict on models
+gbm_train_pred <- predict(gbm_model, spotify_train)# train set
+gbm_test_pred <- predict(gbm_model, spotify_test) # test set
+gbm_cv_pred <- predict(gbm_cv, spotify_train)# cv train set
+```
+
+**Model Performance**
+
+```{r, eval=FALSE}
+# gbm confusion matrices
+rf_train_cm <- confusionMatrix(rf_train_pred, spotify_train$genre)# train set
+rf_test_cm <- confusionMatrix(rf_test_pred, spotify_test$genre) # test set
+rf_cv_cm <- confusionMatrix(rf_cv_pred, spotify_train$genre)# cv train set
+
+# compare performances
+print(rf_train_cm)
+print(rf_test_cm)
+print(rf_cv_cm)
+```
+
+### Feature Importance
+
+```{r, eval=FALSE}
+rf_importance <- varImp(rf_model)
 ```
