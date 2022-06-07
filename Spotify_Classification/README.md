@@ -238,35 +238,36 @@ selecting the most appropriate features for the models.
 # number of tracks per genre
 spotify_clean %>%
   group_by(genre) %>%
-  count()
+  count() %>%
+  arrange(n)
 ```
 
     ## # A tibble: 26 x 2
     ## # Groups:   genre [26]
-    ##    genre           n
-    ##    <fct>       <int>
-    ##  1 Movie        7802
-    ##  2 R&B          5353
-    ##  3 A Capella     119
-    ##  4 Alternative  9095
-    ##  5 Country      7383
-    ##  6 Dance        7982
-    ##  7 Electronic   9149
-    ##  8 Anime        8935
-    ##  9 Folk         8048
-    ## 10 Blues        8496
+    ##    genre                n
+    ##    <fct>            <int>
+    ##  1 A Capella          119
+    ##  2 Rap               1456
+    ##  3 Rock              2227
+    ##  4 Pop               2417
+    ##  5 Indie             3318
+    ##  6 Soul              4430
+    ##  7 R&B               5353
+    ##  8 Children's Music  6741
+    ##  9 Country           7383
+    ## 10 Hip-Hop           7413
     ## # ... with 16 more rows
 
 ``` r
 # reorder variables
 spotify_clean <- spotify_clean %>%
   # remove A Capella from data
-  filter(!genre %in% "A Capella") %>%
+  filter(!genre %in% c("A Capella","Anime","Children's Music","Movie","Soundtrack","World")) %>%
   droplevels() %>%
   select(genre, time_signature, everything())
 ```
 
-### Numerical Features
+### Feature Analysis/Engineering
 
 To ensure the data possesses proper center and spread, let’s take a look
 at each possible features by genre. First let’s visualize the
@@ -288,10 +289,13 @@ spotify_clean %>%
   labs(title = "Spotify Audio Feature Density Across Genres",
        x = "", y = "density") +
   theme(axis.text.x = element_text(size = 8, angle = 40),
-        axis.text.y = element_blank())
+        axis.text.y = element_blank(),
+        legend.title = element_text(size=10),
+        legend.key.size = unit(5, "mm"),
+        legend.text = element_text(size=8))
 ```
 
-![](Spotify_Classification_files/figure-gfm/Numerical%20Features-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-8-1.jpeg)<!-- -->
 
 Based on the density plots above, `duration_min`, `instrumentalness`,
 and `loudness` require normalization to ensure a well distributed
@@ -308,7 +312,7 @@ spotify_clean %>%
   ggtitle("Duration (in minutes)")
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-8-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-9-1.jpeg)<!-- -->
 
 ``` r
 # store outliers based on 4th whisker
@@ -326,7 +330,7 @@ spotify_clean %>%
   ggtitle("Duration(in minutes) - no outliers")
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-8-2.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-9-2.jpeg)<!-- -->
 
 **Instrumentalness**
 
@@ -339,35 +343,55 @@ spotify_clean %>%
   ggtitle("Instrumentalness")
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-9-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-10-1.jpeg)<!-- -->
 
 ``` r
-# visualize number of genres with no instrumentalness
+# compare data w/ and w/o instrumentalness > 0
 spotify_clean %>%
-  mutate(zero = instrumentalness == 0) %>%
-  ggplot(aes(x=zero, fill=genre)) +
-  geom_bar()
+  filter(instrumentalness > 0.1) %>%
+  ggplot(aes(y = instrumentalness)) +
+  geom_boxplot() +
+  coord_flip()
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-9-2.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-10-2.jpeg)<!-- -->
 
 ``` r
-# store tracks with 0 instrumentalness in a separate df
-with_instrument <- spotify_clean %>%
-  filter(instrumentalness != 0)
+# add all tracks w/o instrumentalness by genre
+spotify_clean %>% 
+  group_by(genre) %>%
+  summarize(sum(instrumentalness == 0))
 ```
 
-After the analysis above, the option I believe to be most useful to the
-model performance is to remove this feature altogether as there are
-quite a large number of tracks with 0 `instrumentalness` detected, which
-is spread across all genres. I also stored the values within the data
-with no instruments detected and will determine later if the 57791
-tracks are worth dropping to have `instrumentalness` as a predictor
-variable for the models. This will be determined during the
-[correlation](#correlation) step.
+    ## # A tibble: 20 x 2
+    ##    genre       `sum(instrumentalness == 0)`
+    ##    <fct>                              <int>
+    ##  1 R&B                                 2579
+    ##  2 Alternative                         2573
+    ##  3 Country                             3596
+    ##  4 Dance                               4147
+    ##  5 Electronic                           403
+    ##  6 Folk                                1576
+    ##  7 Blues                               1385
+    ##  8 Opera                                484
+    ##  9 Hip-Hop                             4835
+    ## 10 Rap                                  956
+    ## 11 Indie                                940
+    ## 12 Classical                            320
+    ## 13 Pop                                 1361
+    ## 14 Reggae                              3518
+    ## 15 Reggaeton                           5101
+    ## 16 Jazz                                 813
+    ## 17 Rock                                 635
+    ## 18 Ska                                 2327
+    ## 19 Comedy                              8116
+    ## 20 Soul                                1252
+
+From the yielded results above, I will remove `instrumentalness` as a
+predictor variable due to the little influence it shows in terms of
+classifying a genre.
 
 ``` r
-# drop instrumentalness
 spotify_clean <- spotify_clean %>%
   select(-instrumentalness)
 ```
@@ -383,12 +407,12 @@ spotify_clean %>%
   ggtitle("Loudness")
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-11-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-12-1.jpeg)<!-- -->
 
 ``` r
-# remove outlier
+# remove outliers
 spotify_clean <- spotify_clean %>%
-  filter(loudness > -30)
+  filter(loudness < max(loudness))
 
 # boxplot without outlier
 spotify_clean %>%
@@ -398,7 +422,29 @@ spotify_clean %>%
   ggtitle("Loudness - no outliers")
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-11-2.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-12-2.jpeg)<!-- -->
+
+**Time Signature**
+
+``` r
+# plot time_signature distribution
+spotify_clean %>%
+  ggplot(aes(x=time_signature)) +
+  geom_bar()
+```
+
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-13-1.jpeg)<!-- -->
+
+As can be seen in the plot above, a substantial number of tracks were
+recorded to be in `4/4` meter, which can cause great bias during the
+model training process. Based on inference and industry knowledge, I
+will remove `time_signature` from the dataframe.
+
+``` r
+# drop time_signature
+spotify_clean <- spotify_clean %>%
+  select(-time_signature)
+```
 
 ### Correlation
 
@@ -411,13 +457,14 @@ when training and testing our model.
 ``` r
 # correlation plot of numeric features
 spotify_clean %>%
-  select(-c(genre,time_signature)) %>% 
+  select(-c(genre)) %>% 
   cor() %>%
   corrplot(method="number", type="upper", diag=FALSE,
            tl.col = "black", tl.cex=0.9, tl.srt=45)
 ```
 
-Loudness and energy possess the highest positive correlation (0.83),
+![](Spotify_Classification_files/figure-gfm/unnamed-chunk-15-1.jpeg)<!-- -->
+Loudness and energy possess the highest positive correlation (0.81),
 therefore one must go in order to avoid prediction bias. Since `energy`
 is much more evenly distributed compared to `loudness`, the latter will
 be dropped from the final version of the full data frame.
@@ -431,58 +478,143 @@ spotify_final <- spotify_clean %>%
 ## Train/Test Split
 
 ``` r
-# scale numeric features
-features_scaled <- spotify_final %>%
-  mutate_if(is.numeric, scale)
-
 # creating index and creating train/test split
 set.seed(123)
-index <- createDataPartition(spotify_final$genre, p=0.75, list=FALSE)
-spotify_train <- features_scaled[index,]
-spotify_test <- features_scaled[-index,]
+index <- createDataPartition(spotify_final$genre, p=0.80, list=FALSE)
+spotify_train <- spotify_final[index,]
+spotify_test <- spotify_final[-index,]
 
 # training control for models
-ctrl <- trainControl(method="cv", number=10, verboseIter=FALSE)
+ctrl <- trainControl(method="cv", number=10)
 ```
 
 ## Modeling
 
 ### Nearest Neighbors
 
+``` r
+# build training model
+knn_model <- train(genre~., spotify_train, 
+                   method="knn",
+                   trControl=trainControl(method="none"),
+                   preProcess=c("center","scale"))
+knn_model
+
+# build cv model
+knn_cv <- train(genre~., spotify_train, 
+                   method="knn",
+                   trControl=ctrl,
+                   preProcess=c("center","scale"))
+knn_cv
+```
+
+**Predictions**
+
+``` r
+# predict on models
+knn_train_pred <- predict(knn_model, spotify_train) # train set
+knn_test_pred <- predict(knn_model, spotify_test) # test set
+knn_cv_pred <- predict(knn_cv, spotify_train) # cv
+```
+
+**Model Performance**
+
+``` r
+# knn confusion matrices
+knn_train_cm <- confusionMatrix(knn_train_pred, spotify_train$genre) # train set
+knn_test_cm <- confusionMatrix(knn_test_pred, spotify_test$genre) # test set
+knn_cv_cm <- confusionMatrix(knn_cv_pred, spotify_train$genre) # cv
+
+# compare performances
+print(knn_train_cm)
+print(knn_test_cm)
+print(knn_cv_cm)
+```
+
 ### Random Forest
 
 ``` r
-set.seed(123)
-# random forest model
-rf_model <- randomForest(genre~., spotify_train)
+# build training model
+rf_model <- train(genre~., spotify_train, 
+                   method="rf",
+                   trControl=trainControl(method="none"),
+                   preProcess=c("center","scale"))
 rf_model
 
-rf_train <- train()
+# build cv model
+rf_cv <- train(genre~., spotify_train, 
+                   method="rf",
+                   trControl=ctrl,
+                   preProcess=c("center","scale"))
+rf_cv
+```
 
-print(rf_train)
+**Predictions**
 
-# training confusion matrix
-confusionMatrix(rf_train$finalModel$predictions, spotify_train$track_genre)
+``` r
+# predict on models
+rf_train_pred <- predict(rf_model, spotify_train) # train set
+rf_test_pred <- predict(rf_model, spotify_test) # test set
+rf_cv_pred <- predict(rf_cv, spotify_train) # cv 
+```
 
-# compute accuracy on test set
+**Model Performance**
 
+``` r
+# random forest confusion matrices
+rf_train_cm <- confusionMatrix(rf_train_pred, spotify_train$genre) # train set
+rf_test_cm <- confusionMatrix(rf_test_pred, spotify_test$genre) # test set
+rf_cv_cm <- confusionMatrix(rf_cv_pred, spotify_train$genre) # cv
 
-# plot results with "vip" package
-(rf_varImp<- vip(rf_model, geom="point", horizontal=FALSE,
-              aes=list(color="blue", shape=17, size=5)) +
-              theme_light())
+# compare performances
+print(rf_train_cm)
+print(rf_test_cm)
+print(rf_cv_cm)
 ```
 
 ### Gradient Boosting
 
-### Model Comparison
+``` r
+# build training model
+gbm_model <- train(genre~., spotify_train, 
+                   method="gbm",
+                   trControl=trainControl(method="none"),
+                   preProcess=c("center","scale"))
+gbm_model
+
+# build cv model
+gbm_cv <- train(genre~., spotify_train, 
+                   method="gbm",
+                   trControl=ctrl,
+                   preProcess=c("center","scale"))
+gbm_cv
+```
+
+**Predictions**
 
 ``` r
-# test variable importance by model
-ggarrange(rf_varImp, gbm_varImp, gbm2_varImp,
-          widths=c(0.5,0.5,0.5), heights=c(0.5,0.5,0.5), nrow=3)
-# test confusion matrix by model
-kable(rf_cm$table)
-kable(gbm_cm$table)
-kable(gbm2_cm$table)
+# predict on models
+gbm_train_pred <- predict(gbm_model, spotify_train)# train set
+gbm_test_pred <- predict(gbm_model, spotify_test) # test set
+gbm_cv_pred <- predict(gbm_cv, spotify_train)# cv train set
+```
+
+**Model Performance**
+
+``` r
+# gbm confusion matrices
+rf_train_cm <- confusionMatrix(rf_train_pred, spotify_train$genre)# train set
+rf_test_cm <- confusionMatrix(rf_test_pred, spotify_test$genre) # test set
+rf_cv_cm <- confusionMatrix(rf_cv_pred, spotify_train$genre)# cv train set
+
+# compare performances
+print(rf_train_cm)
+print(rf_test_cm)
+print(rf_cv_cm)
+```
+
+### Feature Importance
+
+``` r
+rf_importance <- varImp(rf_model)
 ```
