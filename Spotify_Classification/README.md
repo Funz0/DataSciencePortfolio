@@ -3,7 +3,6 @@ Spotify Predictive Analysis
 Alejandro Cepeda
 5/23/2022
 
-***GRAMMAR CHECK ALL MARKDOWN TEXT BEFORE UPLOADING***
 
 ## Context
 
