@@ -40,12 +40,11 @@ Music (listening and playing) is one of my favorites pastimes and go-to therapy 
 
 The following are the packages used throughout this project:
 
-```{r, message=FALSE}
+```{r "Packages", message=FALSE}
 # libraries
 library(tidyverse)
 library(corrplot)
-library(caret)
-library(randomForest)
+library(broom)
 ```
 
 ```{r setup, include=FALSE}
@@ -55,17 +54,17 @@ theme_set(theme_minimal())
 
 Let's read in the dataset from the working directory:
 
-```{r}
+```{r "Data Collection"}
 # read in data
 spotify <- read_csv("SpotifyFeatures.csv", show_col_types = FALSE)
 glimpse(spotify)
 ```
 
-## Data Preparation
+## Data Preprocessing
 
 Prior to conducting EDA, there is already some preexisting knowledge regarding the variables within the dataframe. Since this data was gathered using an API, it is always a good practice to check for duplicate observations (or rows) to ensure uniformity. The variables `artist_name`, `track_name`, and `track_id` will not be needed for the purpose of this project, thus the best course of action may be to remove them. To conduct all of these data cleaning steps, I created a pipeline using the dplyr's `%>%` operator (loaded from the tidyverse package).
 
-```{r}
+```{r "Data Preprocessing"}
 # pipeline to clean, drop and reformat variables
 spotify_clean <- spotify %>%
   # remove duplicate tracks
@@ -82,7 +81,7 @@ spotify_clean <- spotify %>%
 
 Based on prior musical knowledge (guitar and percussion classes), I decided it is best to exclude `key`, `mode`, and `time_signature` from the dataframe as they do not properly distinguish a genre as their measurements often overlap, regardless of how a track sounds. The key, as described in the [data description](#description), measures the pitch the track was recorded in, which often only changes how high or low the pitch will sound. The mode, labelled as either major or minor, may not be specific enough for the classification models to properly differentiate one from the other to predict a music genre. Time signature will be used for further analysis as the tempo in which a track is played may be useful for classifying a genre.
 
-```{r}
+```{r "Data Preprocessing 2"}
 # drop mode and time signature
 spotify_clean <- spotify_clean %>%
   select(-c(key, mode))
@@ -90,7 +89,7 @@ spotify_clean <- spotify_clean %>%
 
 Before proceeding any further, inspecting the genres within the dataframe may be helpful in the case of a misleading genre being present.
 
-```{r}
+```{r "Data Preprocessing 3"}
 # ensure genres are properly written
 levels(spotify_clean$genre)
 
@@ -105,7 +104,7 @@ Success! We can now continue with our cleaning process.
 
 As the final step of the cleaning process, let's check for any missing values:
 
-```{r}
+```{r "Data Preprocessing 4"}
 # check for missing data
 colSums(is.na(spotify_clean))
 ```
@@ -116,7 +115,7 @@ Great news, 0 NAs were found!
 
 Now that our data is clean, we can conduct some EDA and determine whether any further manipulation to be made on the data as well as selecting the most appropriate features for the models.
 
-```{r}
+```{r "Exploratory Data Analysis"}
 # number of tracks per genre
 spotify_clean %>%
   group_by(genre) %>%
@@ -131,11 +130,11 @@ spotify_clean <- spotify_clean %>%
   select(genre, time_signature, everything())
 ```
 
-### Feature Analysis/Engineering
+### Feature Engineering
 
 To ensure the data possesses proper center and spread, let's take a look at each possible features by genre. First let's visualize the distribution of each possible feature across all genres in the dataframe:
 
-```{r, warning=FALSE, message=FALSE}
+```{r "Feature Engineering", warning=FALSE, message=FALSE}
 # store numeric variable names in a vector
 feature_names <- names(spotify_clean)[3:13]
 
@@ -160,7 +159,7 @@ Based on the density plots above, `duration_min`, `instrumentalness`, and `loudn
 
 **Track Duration**
 
-```{r}
+```{r "Track Duration"}
 # look for outliers
 spotify_clean %>%
   ggplot(aes(y = duration_min)) +
@@ -185,7 +184,7 @@ spotify_clean %>%
 
 **Instrumentalness**
 
-```{r, warning=FALSE}
+```{r "Instrumentalness", warning=FALSE}
 # look for outliers
 spotify_clean %>%
   ggplot(aes(y = instrumentalness)) +
@@ -208,14 +207,14 @@ spotify_clean %>%
 
 From the yielded results above, I will remove `instrumentalness` as a predictor variable due to the little influence it shows in terms of classifying a genre.
 
-```{r}
+```{r "Instrumentalness 2"}
 spotify_clean <- spotify_clean %>%
   select(-instrumentalness)
 ```
 
 **Loudness**
 
-```{r}
+```{r "Loudness"}
 # look for outliers
 spotify_clean %>%
   ggplot(aes(y = loudness)) +
@@ -238,7 +237,7 @@ spotify_clean %>%
 
 **Time Signature**
 
-```{r}
+```{r "Time Signature"}
 # plot time_signature distribution
 spotify_clean %>%
   ggplot(aes(x=time_signature)) +
@@ -247,7 +246,7 @@ spotify_clean %>%
 
 As can be seen in the plot above, a substantial number of tracks were recorded to be in `4/4` meter, which can cause great bias during the model training process. Based on inference and industry knowledge, I will remove `time_signature` from the dataframe. 
 
-```{r}
+```{r "Time Signature 2"}
 # drop time_signature
 spotify_clean <- spotify_clean %>%
   select(-time_signature)
@@ -257,7 +256,7 @@ spotify_clean <- spotify_clean %>%
 
 The final step prior to the modeling process is to find any features to exclude with the help of a visualization of the correlations across all numerical features. What we are looking for here are associations between the features so any bias between multiple variables are avoided when training and testing our model.
 
-```{r}
+```{r "Correlation"}
 # correlation plot of numeric features
 spotify_clean %>%
   select(-c(genre)) %>% 
@@ -265,9 +264,10 @@ spotify_clean %>%
   corrplot(method="number", type="upper", diag=FALSE,
            tl.col = "black", tl.cex=0.9, tl.srt=45)
 ```
+
 Loudness and energy possess the highest positive correlation (0.81), therefore one must go in order to avoid prediction bias. Since `energy` is much more evenly distributed compared to `loudness`, the latter will be dropped from the final version of the full data frame.
 
-```{r}
+```{r "Correlation 2"}
 # remove loudness
 spotify_final <- spotify_clean %>%
   select(-loudness)
@@ -277,7 +277,7 @@ spotify_final <- spotify_clean %>%
 
 
 
-```{r}
+```{r "Train/Test Split"}
 # creating index and creating train/test split
 set.seed(123)
 index <- createDataPartition(spotify_final$genre, p=0.80, list=FALSE)
@@ -294,7 +294,7 @@ ctrl <- trainControl(method="cv", number=10)
 
 ### Nearest Neighbors
 
-```{r, eval=FALSE}
+```{r "Nearest Neighbors", eval=FALSE}
 # build training model
 knn_model <- train(genre~., spotify_train, 
                    method="knn",
@@ -312,7 +312,7 @@ knn_cv
 
 **Predictions**
 
-```{r, eval=FALSE}
+```{r "Predictions", eval=FALSE}
 # predict on models
 knn_train_pred <- predict(knn_model, spotify_train) # train set
 knn_test_pred <- predict(knn_model, spotify_test) # test set
@@ -321,7 +321,7 @@ knn_cv_pred <- predict(knn_cv, spotify_train) # cv
 
 **Model Performance**
 
-```{r, eval=FALSE}
+```{r "kNN Model Performance", eval=FALSE}
 # knn confusion matrices
 knn_train_cm <- confusionMatrix(knn_train_pred, spotify_train$genre) # train set
 knn_test_cm <- confusionMatrix(knn_test_pred, spotify_test$genre) # test set
@@ -335,7 +335,7 @@ print(knn_cv_cm)
 
 ### Random Forest
 
-```{r, eval=FALSE}
+```{r "Random Forest", eval=FALSE}
 # build training model
 rf_model <- train(genre~., spotify_train, 
                    method="rf",
@@ -353,7 +353,7 @@ rf_cv
 
 **Predictions**
 
-```{r, eval=FALSE}
+```{r "RF Predictions", eval=FALSE}
 # predict on models
 rf_train_pred <- predict(rf_model, spotify_train) # train set
 rf_test_pred <- predict(rf_model, spotify_test) # test set
@@ -362,7 +362,7 @@ rf_cv_pred <- predict(rf_cv, spotify_train) # cv
 
 **Model Performance**
 
-```{r, eval=FALSE}
+```{r "Model Performance", eval=FALSE}
 # random forest confusion matrices
 rf_train_cm <- confusionMatrix(rf_train_pred, spotify_train$genre) # train set
 rf_test_cm <- confusionMatrix(rf_test_pred, spotify_test$genre) # test set
@@ -376,7 +376,7 @@ print(rf_cv_cm)
 
 ### Gradient Boosting
 
-```{r, eval=FALSE}
+```{r "Gradient Boosting", eval=FALSE}
 # build training model
 gbm_model <- train(genre~., spotify_train, 
                    method="gbm",
@@ -394,20 +394,20 @@ gbm_cv
 
 **Predictions**
 
-```{r, eval=FALSE}
+```{r "Predictions", eval=FALSE}
 # predict on models
-gbm_train_pred <- predict(gbm_model, spotify_train)# train set
+gbm_train_pred <- predict(gbm_model, spotify_train) # train set
 gbm_test_pred <- predict(gbm_model, spotify_test) # test set
-gbm_cv_pred <- predict(gbm_cv, spotify_train)# cv train set
+gbm_cv_pred <- predict(gbm_cv, spotify_train) # cv train set
 ```
 
 **Model Performance**
 
-```{r, eval=FALSE}
+```{r "Model Performance", eval=FALSE}
 # gbm confusion matrices
-rf_train_cm <- confusionMatrix(rf_train_pred, spotify_train$genre)# train set
+rf_train_cm <- confusionMatrix(rf_train_pred, spotify_train$genre) # train set
 rf_test_cm <- confusionMatrix(rf_test_pred, spotify_test$genre) # test set
-rf_cv_cm <- confusionMatrix(rf_cv_pred, spotify_train$genre)# cv train set
+rf_cv_cm <- confusionMatrix(rf_cv_pred, spotify_train$genre) # cv train set
 
 # compare performances
 print(rf_train_cm)
@@ -417,6 +417,6 @@ print(rf_cv_cm)
 
 ### Feature Importance
 
-```{r, eval=FALSE}
+```{r "Feature Performance", eval=FALSE}
 rf_importance <- varImp(rf_model)
 ```
