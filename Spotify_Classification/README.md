@@ -1,8 +1,9 @@
 Spotify Predictive Analysis
 ================
 Alejandro Cepeda
-5/23/2022
+6/16/2022
 
+***GRAMMAR CHECK ALL MARKDOWN TEXT BEFORE UPLOADING***
 
 ## Context
 
@@ -96,8 +97,13 @@ The following are the packages used throughout this project:
 # libraries
 library(tidyverse)
 library(corrplot)
-library(caret)
-library(randomForest)
+library(rsample)
+library(broom)
+library(yardstick)
+library(nnet)
+library(Metrics)
+library(ranger)
+library(tidymodels)
 ```
 
 Let’s read in the dataset from the working directory:
@@ -110,26 +116,26 @@ glimpse(spotify)
 
     ## Rows: 232,725
     ## Columns: 18
-    ## $ genre            <chr> "Movie", "Movie", "Movie", "Movie", "Movie", "Movie",~
-    ## $ artist_name      <chr> "Henri Salvador", "Martin & les fées", "Joseph Willia~
-    ## $ track_name       <chr> "C'est beau de faire un Show", "Perdu d'avance (par G~
-    ## $ track_id         <chr> "0BRjO6ga9RKCKjfDqeFgWV", "0BjC1NfoEOOusryehmNudP", "~
-    ## $ popularity       <dbl> 0, 1, 3, 0, 4, 0, 2, 15, 0, 10, 0, 2, 4, 3, 0, 0, 0, ~
-    ## $ acousticness     <dbl> 0.61100, 0.24600, 0.95200, 0.70300, 0.95000, 0.74900,~
-    ## $ danceability     <dbl> 0.389, 0.590, 0.663, 0.240, 0.331, 0.578, 0.703, 0.41~
-    ## $ duration_ms      <dbl> 99373, 137373, 170267, 152427, 82625, 160627, 212293,~
-    ## $ energy           <dbl> 0.9100, 0.7370, 0.1310, 0.3260, 0.2250, 0.0948, 0.270~
-    ## $ instrumentalness <dbl> 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00, 1.23e-01, 0.0~
-    ## $ key              <chr> "C#", "F#", "C", "C#", "F", "C#", "C#", "F#", "C", "G~
-    ## $ liveness         <dbl> 0.3460, 0.1510, 0.1030, 0.0985, 0.2020, 0.1070, 0.105~
-    ## $ loudness         <dbl> -1.828, -5.559, -13.879, -12.178, -21.150, -14.970, -~
-    ## $ mode             <chr> "Major", "Minor", "Minor", "Major", "Major", "Major",~
-    ## $ speechiness      <dbl> 0.0525, 0.0868, 0.0362, 0.0395, 0.0456, 0.1430, 0.953~
-    ## $ tempo            <dbl> 166.969, 174.003, 99.488, 171.758, 140.576, 87.479, 8~
-    ## $ time_signature   <chr> "4/4", "4/4", "5/4", "4/4", "4/4", "4/4", "4/4", "4/4~
-    ## $ valence          <dbl> 0.8140, 0.8160, 0.3680, 0.2270, 0.3900, 0.3580, 0.533~
+    ## $ genre            <chr> "Movie", "Movie", "Movie", "Movie", "Movie", "Movie",…
+    ## $ artist_name      <chr> "Henri Salvador", "Martin & les fées", "Joseph Willia…
+    ## $ track_name       <chr> "C'est beau de faire un Show", "Perdu d'avance (par G…
+    ## $ track_id         <chr> "0BRjO6ga9RKCKjfDqeFgWV", "0BjC1NfoEOOusryehmNudP", "…
+    ## $ popularity       <dbl> 0, 1, 3, 0, 4, 0, 2, 15, 0, 10, 0, 2, 4, 3, 0, 0, 0, …
+    ## $ acousticness     <dbl> 0.61100, 0.24600, 0.95200, 0.70300, 0.95000, 0.74900,…
+    ## $ danceability     <dbl> 0.389, 0.590, 0.663, 0.240, 0.331, 0.578, 0.703, 0.41…
+    ## $ duration_ms      <dbl> 99373, 137373, 170267, 152427, 82625, 160627, 212293,…
+    ## $ energy           <dbl> 0.9100, 0.7370, 0.1310, 0.3260, 0.2250, 0.0948, 0.270…
+    ## $ instrumentalness <dbl> 0.00e+00, 0.00e+00, 0.00e+00, 0.00e+00, 1.23e-01, 0.0…
+    ## $ key              <chr> "C#", "F#", "C", "C#", "F", "C#", "C#", "F#", "C", "G…
+    ## $ liveness         <dbl> 0.3460, 0.1510, 0.1030, 0.0985, 0.2020, 0.1070, 0.105…
+    ## $ loudness         <dbl> -1.828, -5.559, -13.879, -12.178, -21.150, -14.970, -…
+    ## $ mode             <chr> "Major", "Minor", "Minor", "Major", "Major", "Major",…
+    ## $ speechiness      <dbl> 0.0525, 0.0868, 0.0362, 0.0395, 0.0456, 0.1430, 0.953…
+    ## $ tempo            <dbl> 166.969, 174.003, 99.488, 171.758, 140.576, 87.479, 8…
+    ## $ time_signature   <chr> "4/4", "4/4", "5/4", "4/4", "4/4", "4/4", "4/4", "4/4…
+    ## $ valence          <dbl> 0.8140, 0.8160, 0.3680, 0.2270, 0.3900, 0.3580, 0.533…
 
-## Data Preparation
+## Data Cleaning
 
 Prior to conducting EDA, there is already some preexisting knowledge
 regarding the variables within the dataframe. Since this data was
@@ -194,6 +200,11 @@ levels(spotify_clean$genre)
 # recode Children's Music genres as one
 levels(spotify_clean$genre)[levels(spotify_clean$genre) == "Children’s Music"] <- "Children's Music"
 
+# narrowing down genres for less memory usage
+spotify_clean <- spotify_clean %>%
+  filter(genre %in% c("Country","Electronic","Hip-Hop",
+                      "Classical","Reggae","Reggaeton","Jazz"))
+
 # verify recoding of levels
 levels(spotify_clean$genre)
 ```
@@ -241,21 +252,17 @@ spotify_clean %>%
   arrange(n)
 ```
 
-    ## # A tibble: 26 x 2
-    ## # Groups:   genre [26]
-    ##    genre                n
-    ##    <fct>            <int>
-    ##  1 A Capella          119
-    ##  2 Rap               1456
-    ##  3 Rock              2227
-    ##  4 Pop               2417
-    ##  5 Indie             3318
-    ##  6 Soul              4430
-    ##  7 R&B               5353
-    ##  8 Children's Music  6741
-    ##  9 Country           7383
-    ## 10 Hip-Hop           7413
-    ## # ... with 16 more rows
+    ## # A tibble: 7 × 2
+    ## # Groups:   genre [7]
+    ##   genre          n
+    ##   <fct>      <int>
+    ## 1 Country     7383
+    ## 2 Hip-Hop     7413
+    ## 3 Jazz        8039
+    ## 4 Reggaeton   8549
+    ## 5 Reggae      8687
+    ## 6 Classical   8711
+    ## 7 Electronic  9149
 
 ``` r
 # reorder variables
@@ -266,7 +273,7 @@ spotify_clean <- spotify_clean %>%
   select(genre, time_signature, everything())
 ```
 
-### Feature Analysis/Engineering
+### Feature Engineering
 
 To ensure the data possesses proper center and spread, let’s take a look
 at each possible features by genre. First let’s visualize the
@@ -294,7 +301,7 @@ spotify_clean %>%
         legend.text = element_text(size=8))
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-8-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Feature%20Engineering-1.jpeg)<!-- -->
 
 Based on the density plots above, `duration_min`, `instrumentalness`,
 and `loudness` require normalization to ensure a well distributed
@@ -311,7 +318,7 @@ spotify_clean %>%
   ggtitle("Duration (in minutes)")
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-9-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Track%20Duration-1.jpeg)<!-- -->
 
 ``` r
 # store outliers based on 4th whisker
@@ -329,7 +336,7 @@ spotify_clean %>%
   ggtitle("Duration(in minutes) - no outliers")
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-9-2.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Track%20Duration-2.jpeg)<!-- -->
 
 **Instrumentalness**
 
@@ -342,7 +349,7 @@ spotify_clean %>%
   ggtitle("Instrumentalness")
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-10-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Instrumentalness-1.jpeg)<!-- -->
 
 ``` r
 # compare data w/ and w/o instrumentalness > 0
@@ -353,7 +360,7 @@ spotify_clean %>%
   coord_flip()
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-10-2.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Instrumentalness-2.jpeg)<!-- -->
 
 ``` r
 # add all tracks w/o instrumentalness by genre
@@ -362,29 +369,16 @@ spotify_clean %>%
   summarize(sum(instrumentalness == 0))
 ```
 
-    ## # A tibble: 20 x 2
-    ##    genre       `sum(instrumentalness == 0)`
-    ##    <fct>                              <int>
-    ##  1 R&B                                 2579
-    ##  2 Alternative                         2573
-    ##  3 Country                             3596
-    ##  4 Dance                               4147
-    ##  5 Electronic                           403
-    ##  6 Folk                                1576
-    ##  7 Blues                               1385
-    ##  8 Opera                                484
-    ##  9 Hip-Hop                             4835
-    ## 10 Rap                                  956
-    ## 11 Indie                                940
-    ## 12 Classical                            320
-    ## 13 Pop                                 1361
-    ## 14 Reggae                              3518
-    ## 15 Reggaeton                           5101
-    ## 16 Jazz                                 813
-    ## 17 Rock                                 635
-    ## 18 Ska                                 2327
-    ## 19 Comedy                              8116
-    ## 20 Soul                                1252
+    ## # A tibble: 7 × 2
+    ##   genre      `sum(instrumentalness == 0)`
+    ##   <fct>                             <int>
+    ## 1 Country                            3596
+    ## 2 Electronic                          404
+    ## 3 Hip-Hop                            4835
+    ## 4 Classical                           320
+    ## 5 Reggae                             3518
+    ## 6 Reggaeton                          5102
+    ## 7 Jazz                                813
 
 From the yielded results above, I will remove `instrumentalness` as a
 predictor variable due to the little influence it shows in terms of
@@ -406,7 +400,7 @@ spotify_clean %>%
   ggtitle("Loudness")
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-12-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Loudness-1.jpeg)<!-- -->
 
 ``` r
 # remove outliers
@@ -421,7 +415,7 @@ spotify_clean %>%
   ggtitle("Loudness - no outliers")
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-12-2.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Loudness-2.jpeg)<!-- -->
 
 **Time Signature**
 
@@ -432,7 +426,7 @@ spotify_clean %>%
   geom_bar()
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-13-1.jpeg)<!-- -->
+![](Spotify_Classification_files/figure-gfm/Time%20Signature-1.jpeg)<!-- -->
 
 As can be seen in the plot above, a substantial number of tracks were
 recorded to be in `4/4` meter, which can cause great bias during the
@@ -462,8 +456,9 @@ spotify_clean %>%
            tl.col = "black", tl.cex=0.9, tl.srt=45)
 ```
 
-![](Spotify_Classification_files/figure-gfm/unnamed-chunk-15-1.jpeg)<!-- -->
-Loudness and energy possess the highest positive correlation (0.81),
+![](Spotify_Classification_files/figure-gfm/Correlation-1.jpeg)<!-- -->
+
+Loudness and energy possess the highest positive correlation (0.86),
 therefore one must go in order to avoid prediction bias. Since `energy`
 is much more evenly distributed compared to `loudness`, the latter will
 be dropped from the final version of the full data frame.
@@ -474,146 +469,302 @@ spotify_final <- spotify_clean %>%
   select(-loudness)
 ```
 
-## Train/Test Split
+## Data Pre-processing
+
+### Train/Test/CV Split
 
 ``` r
-# creating index and creating train/test split
-set.seed(123)
-index <- createDataPartition(spotify_final$genre, p=0.80, list=FALSE)
-spotify_train <- spotify_final[index,]
-spotify_test <- spotify_final[-index,]
+# creating create initial split 
+spotify_split <- initial_split(spotify_final, prop=0.75)
 
-# training control for models
-ctrl <- trainControl(method="cv", number=10)
+# create train and test sets
+spotify_train <- training(spotify_split)
+spotify_test <- testing(spotify_split)
+
+# create 5 fold cv split
+cv_split <- vfold_cv(spotify_train, v=10)
+
+# store cv dataset
+cv_data <- cv_split %>%
+  mutate(train = map(splits, ~training(.x)),
+         validate = map(splits, ~testing(.x)))
 ```
 
 ## Modeling
 
-### Nearest Neighbors
+### Logistic Regression
 
 ``` r
-# build training model
-knn_model <- train(genre~., spotify_train, 
-                   method="knn",
-                   trControl=trainControl(method="none"),
-                   preProcess=c("center","scale"))
-knn_model
-
-# build cv model
-knn_cv <- train(genre~., spotify_train, 
-                   method="knn",
-                   trControl=ctrl,
-                   preProcess=c("center","scale"))
-knn_cv
+# build multinom logistic regression model
+cv_models_mlr <- cv_data %>%
+  mutate(model = map(train, ~multinom(genre~., data=.x)))
 ```
 
-**Predictions**
-
-``` r
-# predict on models
-knn_train_pred <- predict(knn_model, spotify_train) # train set
-knn_test_pred <- predict(knn_model, spotify_test) # test set
-knn_cv_pred <- predict(knn_cv, spotify_train) # cv
-```
+    ## # weights:  77 (60 variable)
+    ## initial  value 74993.431234 
+    ## iter  10 value 69946.060832
+    ## iter  20 value 55824.058523
+    ## iter  30 value 49288.773845
+    ## iter  40 value 44958.222278
+    ## iter  50 value 43027.622459
+    ## iter  60 value 42515.552299
+    ## iter  70 value 42330.024236
+    ## iter  80 value 42328.420326
+    ## final  value 42328.419010 
+    ## converged
+    ## # weights:  77 (60 variable)
+    ## initial  value 74993.431234 
+    ## iter  10 value 69687.370357
+    ## iter  20 value 54402.415251
+    ## iter  30 value 49359.992085
+    ## iter  40 value 45452.311526
+    ## iter  50 value 43112.033850
+    ## iter  60 value 42528.432653
+    ## iter  70 value 42299.005192
+    ## iter  80 value 42297.031146
+    ## final  value 42297.030306 
+    ## converged
+    ## # weights:  77 (60 variable)
+    ## initial  value 74995.377145 
+    ## iter  10 value 70040.244154
+    ## iter  20 value 54986.951725
+    ## iter  30 value 50351.545628
+    ## iter  40 value 44892.230301
+    ## iter  50 value 43127.714820
+    ## iter  60 value 42527.877088
+    ## iter  70 value 42301.168383
+    ## iter  80 value 42299.011526
+    ## final  value 42299.009844 
+    ## converged
+    ## # weights:  77 (60 variable)
+    ## initial  value 74995.377145 
+    ## iter  10 value 69945.212966
+    ## iter  20 value 54609.298965
+    ## iter  30 value 50036.970831
+    ## iter  40 value 45266.692235
+    ## iter  50 value 43076.150535
+    ## iter  60 value 42480.820534
+    ## iter  70 value 42240.600192
+    ## iter  80 value 42238.588956
+    ## final  value 42238.585914 
+    ## converged
+    ## # weights:  77 (60 variable)
+    ## initial  value 74995.377145 
+    ## iter  10 value 69908.827785
+    ## iter  20 value 53046.693565
+    ## iter  30 value 47699.740320
+    ## iter  40 value 44643.414341
+    ## iter  50 value 42958.859298
+    ## iter  60 value 42459.669305
+    ## iter  70 value 42331.665356
+    ## final  value 42329.820449 
+    ## converged
+    ## # weights:  77 (60 variable)
+    ## initial  value 74995.377145 
+    ## iter  10 value 70020.049956
+    ## iter  20 value 53905.901333
+    ## iter  30 value 48452.453528
+    ## iter  40 value 44881.420347
+    ## iter  50 value 42954.049690
+    ## iter  60 value 42418.814697
+    ## iter  70 value 42252.832724
+    ## final  value 42251.482923 
+    ## converged
+    ## # weights:  77 (60 variable)
+    ## initial  value 74995.377145 
+    ## iter  10 value 69720.677003
+    ## iter  20 value 53471.696226
+    ## iter  30 value 47916.727957
+    ## iter  40 value 44742.156011
+    ## iter  50 value 42938.048386
+    ## iter  60 value 42423.297523
+    ## iter  70 value 42295.307736
+    ## final  value 42293.838016 
+    ## converged
+    ## # weights:  77 (60 variable)
+    ## initial  value 74995.377145 
+    ## iter  10 value 69722.460436
+    ## iter  20 value 55714.284264
+    ## iter  30 value 48883.075668
+    ## iter  40 value 45091.151148
+    ## iter  50 value 43093.242349
+    ## iter  60 value 42524.645847
+    ## iter  70 value 42366.534577
+    ## iter  80 value 42364.567836
+    ## iter  80 value 42364.567516
+    ## iter  80 value 42364.567477
+    ## final  value 42364.567477 
+    ## converged
+    ## # weights:  77 (60 variable)
+    ## initial  value 74995.377145 
+    ## iter  10 value 69809.211170
+    ## iter  20 value 56105.567040
+    ## iter  30 value 49818.789460
+    ## iter  40 value 45167.644579
+    ## iter  50 value 43044.895766
+    ## iter  60 value 42469.218957
+    ## iter  70 value 42304.740508
+    ## final  value 42302.094885 
+    ## converged
+    ## # weights:  77 (60 variable)
+    ## initial  value 74995.377145 
+    ## iter  10 value 69677.437890
+    ## iter  20 value 55555.487295
+    ## iter  30 value 48699.567332
+    ## iter  40 value 44963.958128
+    ## iter  50 value 43142.097317
+    ## iter  60 value 42567.855986
+    ## iter  70 value 42358.868962
+    ## final  value 42356.652366 
+    ## converged
 
 **Model Performance**
 
 ``` r
-# knn confusion matrices
-knn_train_cm <- confusionMatrix(knn_train_pred, spotify_train$genre) # train set
-knn_test_cm <- confusionMatrix(knn_test_pred, spotify_test$genre) # test set
-knn_cv_cm <- confusionMatrix(knn_cv_pred, spotify_train$genre) # cv
+# Prepare actual test set classes
+mlr_test_actual <- spotify_test$genre
 
-# compare performances
-print(knn_train_cm)
-print(knn_test_cm)
-print(knn_cv_cm)
+# Prepare vector of predicted values
+mlr_test_predicted <- predict(cv_models_mlr$model[[2]], spotify_test, type = "class")
 ```
+
+**Test Set Performance**
+
+``` r
+# Compare the actual & predicted performance visually using a table
+table(mlr_test_actual, mlr_test_predicted)
+```
+
+    ##                mlr_test_predicted
+    ## mlr_test_actual Country Electronic Hip-Hop Classical Reggae Reggaeton Jazz
+    ##      Country       1086        193      52        41    111        85  267
+    ##      Electronic     218       1272     103        58    239       278  115
+    ##      Hip-Hop         74         78    1521         0     26        74   34
+    ##      Classical       50        125       0      1673      3         2  131
+    ##      Reggae         160        228      96        12   1129       418  144
+    ##      Reggaeton      120        274     211         6    356      1155   73
+    ##      Jazz           215        179      58       252    319       161  799
+
+``` r
+# Calculate the accuracy
+accuracy(mlr_test_actual, mlr_test_predicted)
+```
+
+    ## [1] 0.6049461
 
 ### Random Forest
 
 ``` r
-# build training model
-rf_model <- train(genre~., spotify_train, 
-                   method="rf",
-                   trControl=trainControl(method="none"),
-                   preProcess=c("center","scale"))
-rf_model
+# determine tuning params before modeling
+cv_tune_rf <- cv_data %>%
+  crossing(mtry = c(1:5))
 
-# build cv model
-rf_cv <- train(genre~., spotify_train, 
-                   method="rf",
-                   trControl=ctrl,
-                   preProcess=c("center","scale"))
-rf_cv
+# build rf model
+cv_models_rf <- cv_tune_rf %>% 
+  mutate(model = map2(train, mtry, ~ranger(formula = genre~., 
+                                           data = .x, mtry = .y,
+                                           num.trees = 100, seed = 84)))
 ```
 
-**Predictions**
+**Model Tuning**
 
 ``` r
-# predict on models
-rf_train_pred <- predict(rf_model, spotify_train) # train set
-rf_test_pred <- predict(rf_model, spotify_test) # test set
-rf_cv_pred <- predict(rf_cv, spotify_train) # cv 
+# Generate validate predictions for each model
+cv_prep_rf <- cv_models_rf %>% 
+  mutate(validate_actual = map(validate, ~.x$genre),
+         validate_predicted = map2(.x = model, .y = validate, 
+                                   ~predict(.x, .y, type = "response")$predictions))
+
+# Calculate the validate recall for each cross validation fold
+cv_perf_acc_rf <- cv_prep_rf %>% 
+  mutate(validate_acc = map2_dbl(validate_actual, validate_predicted, 
+                                    ~accuracy(actual = .x, predicted = .y)))
+
+# Calculate the mean recall for each mtry used  
+cv_perf_acc_rf %>% 
+  group_by(mtry) %>% 
+  summarize(mean_acc = mean(validate_acc))
 ```
+
+    ## # A tibble: 5 × 2
+    ##    mtry mean_acc
+    ##   <int>    <dbl>
+    ## 1     1    0.689
+    ## 2     2    0.694
+    ## 3     3    0.691
+    ## 4     4    0.692
+    ## 5     5    0.689
 
 **Model Performance**
 
 ``` r
-# random forest confusion matrices
-rf_train_cm <- confusionMatrix(rf_train_pred, spotify_train$genre) # train set
-rf_test_cm <- confusionMatrix(rf_test_pred, spotify_test$genre) # test set
-rf_cv_cm <- confusionMatrix(rf_cv_pred, spotify_train$genre) # cv
+# Build the logistic regression model using all training data
+rf_best_model <- ranger(genre~., data = spotify_train, 
+                     num.trees = 500, mtry = 2)
 
-# compare performances
-print(rf_train_cm)
-print(rf_test_cm)
-print(rf_cv_cm)
+# Prepare binary vector of actual Attrition values for testing_data
+rf_test_actual <- spotify_test$genre
+
+# Prepare binary vector of predicted Attrition values for testing_data
+rf_test_predicted <- predict(rf_best_model, spotify_test, type = "response")$predictions
 ```
 
-### Gradient Boosting
+**Test Set Performance**
 
 ``` r
-# build training model
-gbm_model <- train(genre~., spotify_train, 
-                   method="gbm",
-                   trControl=trainControl(method="none"),
-                   preProcess=c("center","scale"))
-gbm_model
-
-# build cv model
-gbm_cv <- train(genre~., spotify_train, 
-                   method="gbm",
-                   trControl=ctrl,
-                   preProcess=c("center","scale"))
-gbm_cv
+# Compare the actual & predicted performance visually using a table
+table(rf_test_actual, rf_test_predicted)
 ```
 
-**Predictions**
+    ##               rf_test_predicted
+    ## rf_test_actual Country Electronic Hip-Hop Classical Reggae Reggaeton Jazz
+    ##     Country       1326        128      35         8     70        63  205
+    ##     Electronic     155       1510     111        24    200       147  136
+    ##     Hip-Hop         35         44    1622         0     33        58   15
+    ##     Classical       19        123       0      1720      5         0  117
+    ##     Reggae         133        190     113         8   1227       371  145
+    ##     Reggaeton       83        151     197         1    295      1396   72
+    ##     Jazz           161        201      53       142    212       108 1106
 
 ``` r
-# predict on models
-gbm_train_pred <- predict(gbm_model, spotify_train)# train set
-gbm_test_pred <- predict(gbm_model, spotify_test) # test set
-gbm_cv_pred <- predict(gbm_cv, spotify_train)# cv train set
+# Calculate the test accuracy
+accuracy(rf_test_actual, rf_test_predicted)
 ```
 
-**Model Performance**
+    ## [1] 0.6940591
+
+### Model Comparison
 
 ``` r
-# gbm confusion matrices
-rf_train_cm <- confusionMatrix(rf_train_pred, spotify_train$genre)# train set
-rf_test_cm <- confusionMatrix(rf_test_pred, spotify_test$genre) # test set
-rf_cv_cm <- confusionMatrix(rf_cv_pred, spotify_train$genre)# cv train set
+# store multinom confusion matrix
+mlr_confmat <- as.data.frame(table(mlr_test_actual, mlr_test_predicted))
 
-# compare performances
-print(rf_train_cm)
-print(rf_test_cm)
-print(rf_cv_cm)
+# visualize confusion matrix
+mlr_confmat %>%
+  ggplot(aes(mlr_test_actual, mlr_test_predicted)) +
+  geom_tile(aes(fill = Freq)) +
+  geom_text(aes(label = sprintf("%1.0f", Freq)), vjust = 1) +
+  scale_fill_gradient(low = "white",
+                      high = "red") +
+  labs(x = "Actual", y = "Predicted")
 ```
 
-### Feature Importance
+![](Spotify_Classification_files/figure-gfm/MLR%20Confusion%20Matrix-1.jpeg)<!-- -->
 
 ``` r
-rf_importance <- varImp(rf_model)
+# store random forest confusion matrix
+rf_confmat <- as.data.frame(table(rf_test_actual, rf_test_predicted))
+
+# visualize confusion matrix
+rf_confmat %>%
+  ggplot(aes(rf_test_actual, rf_test_predicted)) +
+  geom_tile(aes(fill = Freq)) +
+  geom_text(aes(label = sprintf("%1.0f", Freq)), vjust = 1) +
+  scale_fill_gradient(low = "white",
+                      high = "red") +
+  labs(x = "Actual", y = "Predicted")
 ```
+
+![](Spotify_Classification_files/figure-gfm/RF%20Confusion%20Matrix-1.jpeg)<!-- -->
+
+## Conclusion
