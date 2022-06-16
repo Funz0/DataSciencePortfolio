@@ -3,26 +3,24 @@ Spotify Predictive Analysis
 Alejandro Cepeda
 6/16/2022
 
-***GRAMMAR CHECK ALL MARKDOWN TEXT BEFORE UPLOADING***
-
 ## Context
 
 ![](spotify-logo.png)
 
-Music (listening and playing) is one of my favorites pastimes and go-to
+Music (listening and playing) is one of my favorite pastimes and go-to
 therapy session to de-stress. From a very young age, I have always
-enjoyed diverse genres of music, which then prompted me to search for
-and discover new genres I may enjoy. That of course could be a hit or
-miss depending on what I discover. To combat the struggle of manually
-conducting searches for new or previously unknown genres of music, I ask
-the following question: **What determines a track’s genre category?**.
-Knowing this may help me determine what makes a track enjoyable or not
-based on my own tastes and hopefully others who read this! To answer
+I enjoyed diverse genres of music, which then prompted me to search for
+and discover new genres I may enjoy. That, of course, could be a hit or
+depending on what I discover. To combat the struggle of manually
+In conducting searches for new or previously unknown genres of music, I ask
+The following question: **What determines a track’s genre category?**.
+Knowing this may help me determine what makes a track enjoyable or not.
+based on my own tastes and hopefully those of others who read this. To answer
 this, I downloaded a Spotify dataset from
 [Kaggle.com](https://www.kaggle.com/datasets/zaheenhamidani/ultimate-spotify-tracks-db),
-which was gathered using the Spotify API, mined and saved by Kaggle user
-Zaheen Hamidani. This dataset contains track information and the audio
-features associated with their respective track, sourced from Spotify’s
+which was gathered using the Spotify API, mined and saved by a Kaggle user,
+Zaheen Hamidani. This dataset contains track information and the audio features
+derived from Spotify's
 API
 [documentation](https://developer.spotify.com/documentation/web-api/reference/#/operations/get-audio-features):
 
@@ -142,9 +140,9 @@ regarding the variables within the dataframe. Since this data was
 gathered using an API, it is always a good practice to check for
 duplicate observations (or rows) to ensure uniformity. The variables
 `artist_name`, `track_name`, and `track_id` will not be needed for the
-purpose of this project, thus the best course of action may be to remove
-them. To conduct all of these data cleaning steps, I created a pipeline
-using the dplyr’s `%>%` operator (loaded from the tidyverse package).
+purpose of this project, thus removal may be the best course of action.
+To conduct all of these data cleaning steps, I created a pipeline
+using dplyr’s `%>%` operator (loaded from the tidyverse package).
 
 ``` r
 # pipeline to clean, drop and reformat variables
