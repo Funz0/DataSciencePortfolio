@@ -1,4 +1,4 @@
-Spotify Predictive Analysis
+Spotify Genre Classification
 ================
 Alejandro Cepeda
 6/16/2022
