@@ -1,7 +1,7 @@
 ---
 title: "Spotify Predictive Analysis"
 author: "Alejandro Cepeda"
-date: "5/23/2022"
+date: "6/16/2022"
 output: 
   github_document:
     dev: jpeg
@@ -44,7 +44,13 @@ The following are the packages used throughout this project:
 # libraries
 library(tidyverse)
 library(corrplot)
+library(rsample)
 library(broom)
+library(yardstick)
+library(nnet)
+library(Metrics)
+library(ranger)
+library(tidymodels)
 ```
 
 ```{r setup, include=FALSE}
@@ -60,7 +66,7 @@ spotify <- read_csv("SpotifyFeatures.csv", show_col_types = FALSE)
 glimpse(spotify)
 ```
 
-## Data Preprocessing
+## Data Cleaning
 
 Prior to conducting EDA, there is already some preexisting knowledge regarding the variables within the dataframe. Since this data was gathered using an API, it is always a good practice to check for duplicate observations (or rows) to ensure uniformity. The variables `artist_name`, `track_name`, and `track_id` will not be needed for the purpose of this project, thus the best course of action may be to remove them. To conduct all of these data cleaning steps, I created a pipeline using the dplyr's `%>%` operator (loaded from the tidyverse package).
 
@@ -95,6 +101,11 @@ levels(spotify_clean$genre)
 
 # recode Children's Music genres as one
 levels(spotify_clean$genre)[levels(spotify_clean$genre) == "Children’s Music"] <- "Children's Music"
+
+# narrowing down genres for less memory usage
+spotify_clean <- spotify_clean %>%
+  filter(genre %in% c("Country","Electronic","Hip-Hop",
+                      "Classical","Reggae","Reggaeton","Jazz"))
 
 # verify recoding of levels
 levels(spotify_clean$genre)
@@ -265,7 +276,7 @@ spotify_clean %>%
            tl.col = "black", tl.cex=0.9, tl.srt=45)
 ```
 
-Loudness and energy possess the highest positive correlation (0.81), therefore one must go in order to avoid prediction bias. Since `energy` is much more evenly distributed compared to `loudness`, the latter will be dropped from the final version of the full data frame.
+Loudness and energy possess the highest positive correlation (0.86), therefore one must go in order to avoid prediction bias. Since `energy` is much more evenly distributed compared to `loudness`, the latter will be dropped from the final version of the full data frame.
 
 ```{r "Correlation 2"}
 # remove loudness
@@ -273,150 +284,153 @@ spotify_final <- spotify_clean %>%
   select(-loudness)
 ```
 
-## Train/Test Split
+## Data Pre-processing
 
-
+### Train/Test/CV Split
 
 ```{r "Train/Test Split"}
-# creating index and creating train/test split
-set.seed(123)
-index <- createDataPartition(spotify_final$genre, p=0.80, list=FALSE)
-spotify_train <- spotify_final[index,]
-spotify_test <- spotify_final[-index,]
+# creating create initial split 
+spotify_split <- initial_split(spotify_final, prop=0.75)
 
-# training control for models
-ctrl <- trainControl(method="cv", number=10)
+# create train and test sets
+spotify_train <- training(spotify_split)
+spotify_test <- testing(spotify_split)
+
+# create 5 fold cv split
+cv_split <- vfold_cv(spotify_train, v=10)
+
+# store cv dataset
+cv_data <- cv_split %>%
+  mutate(train = map(splits, ~training(.x)),
+         validate = map(splits, ~testing(.x)))
 ```
 
 ## Modeling
 
 
 
-### Nearest Neighbors
+### Logistic Regression
 
-```{r "Nearest Neighbors", eval=FALSE}
-# build training model
-knn_model <- train(genre~., spotify_train, 
-                   method="knn",
-                   trControl=trainControl(method="none"),
-                   preProcess=c("center","scale"))
-knn_model
-
-# build cv model
-knn_cv <- train(genre~., spotify_train, 
-                   method="knn",
-                   trControl=ctrl,
-                   preProcess=c("center","scale"))
-knn_cv
+```{r "Logistic Regression"}
+# build multinom logistic regression model
+cv_models_mlr <- cv_data %>%
+  mutate(model = map(train, ~multinom(genre~., data=.x)))
 ```
 
-**Predictions**
 
-```{r "Predictions", eval=FALSE}
-# predict on models
-knn_train_pred <- predict(knn_model, spotify_train) # train set
-knn_test_pred <- predict(knn_model, spotify_test) # test set
-knn_cv_pred <- predict(knn_cv, spotify_train) # cv
-```
 
 **Model Performance**
 
-```{r "kNN Model Performance", eval=FALSE}
-# knn confusion matrices
-knn_train_cm <- confusionMatrix(knn_train_pred, spotify_train$genre) # train set
-knn_test_cm <- confusionMatrix(knn_test_pred, spotify_test$genre) # test set
-knn_cv_cm <- confusionMatrix(knn_cv_pred, spotify_train$genre) # cv
+```{r "MLR Model Performance"}
+# Prepare actual test set classes
+mlr_test_actual <- spotify_test$genre
 
-# compare performances
-print(knn_train_cm)
-print(knn_test_cm)
-print(knn_cv_cm)
+# Prepare vector of predicted values
+mlr_test_predicted <- predict(cv_models_mlr$model[[2]], spotify_test, type = "class")
 ```
+
+**Test Set Performance**
+
+```{r "MLR Test Set Performance"}
+# Compare the actual & predicted performance visually using a table
+table(mlr_test_actual, mlr_test_predicted)
+
+# Calculate the accuracy
+accuracy(mlr_test_actual, mlr_test_predicted)
+```
+
 
 ### Random Forest
 
-```{r "Random Forest", eval=FALSE}
-# build training model
-rf_model <- train(genre~., spotify_train, 
-                   method="rf",
-                   trControl=trainControl(method="none"),
-                   preProcess=c("center","scale"))
-rf_model
+```{r "Random Forest"}
+# determine tuning params before modeling
+cv_tune_rf <- cv_data %>%
+  crossing(mtry = c(1:5))
 
-# build cv model
-rf_cv <- train(genre~., spotify_train, 
-                   method="rf",
-                   trControl=ctrl,
-                   preProcess=c("center","scale"))
-rf_cv
+# build rf model
+cv_models_rf <- cv_tune_rf %>% 
+  mutate(model = map2(train, mtry, ~ranger(formula = genre~., 
+                                           data = .x, mtry = .y,
+                                           num.trees = 100, seed = 84)))
+
 ```
 
-**Predictions**
+**Model Tuning**
 
-```{r "RF Predictions", eval=FALSE}
-# predict on models
-rf_train_pred <- predict(rf_model, spotify_train) # train set
-rf_test_pred <- predict(rf_model, spotify_test) # test set
-rf_cv_pred <- predict(rf_cv, spotify_train) # cv 
-```
+```{r "RF Model Tuning"}
+# Generate validate predictions for each model
+cv_prep_rf <- cv_models_rf %>% 
+  mutate(validate_actual = map(validate, ~.x$genre),
+         validate_predicted = map2(.x = model, .y = validate, 
+                                   ~predict(.x, .y, type = "response")$predictions))
 
-**Model Performance**
+# Calculate the validate recall for each cross validation fold
+cv_perf_acc_rf <- cv_prep_rf %>% 
+  mutate(validate_acc = map2_dbl(validate_actual, validate_predicted, 
+                                    ~accuracy(actual = .x, predicted = .y)))
 
-```{r "Model Performance", eval=FALSE}
-# random forest confusion matrices
-rf_train_cm <- confusionMatrix(rf_train_pred, spotify_train$genre) # train set
-rf_test_cm <- confusionMatrix(rf_test_pred, spotify_test$genre) # test set
-rf_cv_cm <- confusionMatrix(rf_cv_pred, spotify_train$genre) # cv
-
-# compare performances
-print(rf_train_cm)
-print(rf_test_cm)
-print(rf_cv_cm)
-```
-
-### Gradient Boosting
-
-```{r "Gradient Boosting", eval=FALSE}
-# build training model
-gbm_model <- train(genre~., spotify_train, 
-                   method="gbm",
-                   trControl=trainControl(method="none"),
-                   preProcess=c("center","scale"))
-gbm_model
-
-# build cv model
-gbm_cv <- train(genre~., spotify_train, 
-                   method="gbm",
-                   trControl=ctrl,
-                   preProcess=c("center","scale"))
-gbm_cv
-```
-
-**Predictions**
-
-```{r "Predictions", eval=FALSE}
-# predict on models
-gbm_train_pred <- predict(gbm_model, spotify_train) # train set
-gbm_test_pred <- predict(gbm_model, spotify_test) # test set
-gbm_cv_pred <- predict(gbm_cv, spotify_train) # cv train set
+# Calculate the mean recall for each mtry used  
+cv_perf_acc_rf %>% 
+  group_by(mtry) %>% 
+  summarize(mean_acc = mean(validate_acc))
 ```
 
 **Model Performance**
 
-```{r "Model Performance", eval=FALSE}
-# gbm confusion matrices
-rf_train_cm <- confusionMatrix(rf_train_pred, spotify_train$genre) # train set
-rf_test_cm <- confusionMatrix(rf_test_pred, spotify_test$genre) # test set
-rf_cv_cm <- confusionMatrix(rf_cv_pred, spotify_train$genre) # cv train set
+```{r "RF Model Performance"}
+# Build the logistic regression model using all training data
+rf_best_model <- ranger(genre~., data = spotify_train, 
+                     num.trees = 500, mtry = 2)
 
-# compare performances
-print(rf_train_cm)
-print(rf_test_cm)
-print(rf_cv_cm)
+# Prepare binary vector of actual Attrition values for testing_data
+rf_test_actual <- spotify_test$genre
+
+# Prepare binary vector of predicted Attrition values for testing_data
+rf_test_predicted <- predict(rf_best_model, spotify_test, type = "response")$predictions
 ```
 
-### Feature Importance
+**Test Set Performance**
 
-```{r "Feature Performance", eval=FALSE}
-rf_importance <- varImp(rf_model)
+```{r "RF Test Set Performance"}
+# Compare the actual & predicted performance visually using a table
+table(rf_test_actual, rf_test_predicted)
+
+# Calculate the test accuracy
+accuracy(rf_test_actual, rf_test_predicted)
 ```
+
+
+### Model Comparison
+
+```{r "MLR Confusion Matrix"}
+# store multinom confusion matrix
+mlr_confmat <- as.data.frame(table(mlr_test_actual, mlr_test_predicted))
+
+# visualize confusion matrix
+mlr_confmat %>%
+  ggplot(aes(mlr_test_actual, mlr_test_predicted)) +
+  geom_tile(aes(fill = Freq)) +
+  geom_text(aes(label = sprintf("%1.0f", Freq)), vjust = 1) +
+  scale_fill_gradient(low = "white",
+                      high = "red") +
+  labs(x = "Actual", y = "Predicted")
+```
+
+
+
+```{r "RF Confusion Matrix"}
+# store random forest confusion matrix
+rf_confmat <- as.data.frame(table(rf_test_actual, rf_test_predicted))
+
+# visualize confusion matrix
+rf_confmat %>%
+  ggplot(aes(rf_test_actual, rf_test_predicted)) +
+  geom_tile(aes(fill = Freq)) +
+  geom_text(aes(label = sprintf("%1.0f", Freq)), vjust = 1) +
+  scale_fill_gradient(low = "white",
+                      high = "red") +
+  labs(x = "Actual", y = "Predicted")
+```
+
+## Conclusion
+
