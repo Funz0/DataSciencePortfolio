@@ -1,4 +1,4 @@
-Spotify Genre Classification
+Spotify Predictive Analysis
 ================
 Alejandro Cepeda
 6/16/2022
@@ -9,19 +9,19 @@ Alejandro Cepeda
 
 Music (listening and playing) is one of my favorite pastimes and go-to
 therapy session to de-stress. From a very young age, I have always
-I enjoyed diverse genres of music, which then prompted me to search for
-and discover new genres I may enjoy. That, of course, could be a hit or
-depending on what I discover. To combat the struggle of manually
-In conducting searches for new or previously unknown genres of music, I ask
-The following question: **What determines a track’s genre category?**.
-Knowing this may help me determine what makes a track enjoyable or not.
-based on my own tastes and hopefully those of others who read this. To answer
+enjoyed diverse genres of music, which then prompted me to search for
+and discover new genres I may enjoy. That of course could be a hit or
+miss depending on what I discover. To combat the struggle of manually
+conducting searches for new or previously unknown genres of music, I ask
+the following question: **What determines a track’s genre category?**.
+Knowing this may help me determine what makes a track enjoyable or not
+based on my own tastes and hopefully others who read this! To answer
 this, I downloaded a Spotify dataset from
 [Kaggle.com](https://www.kaggle.com/datasets/zaheenhamidani/ultimate-spotify-tracks-db),
-which was gathered using the Spotify API, mined and saved by a Kaggle user,
-Zaheen Hamidani. This dataset contains track information and the audio features
-derived from Spotify's
-API
+which was gathered using the Spotify API, mined, and saved by Kaggle
+user Zaheen Hamidani. This dataset contains track information and the
+audio features associated with their respective track, sourced from
+Spotify’s API
 [documentation](https://developer.spotify.com/documentation/web-api/reference/#/operations/get-audio-features):
 
 ## Data Description
@@ -140,9 +140,9 @@ regarding the variables within the dataframe. Since this data was
 gathered using an API, it is always a good practice to check for
 duplicate observations (or rows) to ensure uniformity. The variables
 `artist_name`, `track_name`, and `track_id` will not be needed for the
-purpose of this project, thus removal may be the best course of action.
-To conduct all of these data cleaning steps, I created a pipeline
-using dplyr’s `%>%` operator (loaded from the tidyverse package).
+purpose of this project, thus the best course of action may be to remove
+them. To conduct all of these data cleaning steps, I created a pipeline
+using the dplyr’s `%>%` operator (loaded from the tidyverse package).
 
 ``` r
 # pipeline to clean, drop and reformat variables
@@ -336,6 +336,10 @@ spotify_clean %>%
 
 ![](Spotify_Classification_files/figure-gfm/Track%20Duration-2.jpeg)<!-- -->
 
+Since the boxplot with no outliers has better distribution, I stored the
+new version of the dataset to reflect the `duration_outliers` not
+present.
+
 **Instrumentalness**
 
 ``` r
@@ -413,9 +417,9 @@ spotify_clean %>%
   ggtitle("Loudness - no outliers")
 ```
 
-![](Spotify_Classification_files/figure-gfm/Loudness-2.jpeg)<!-- -->
-
-**Time Signature**
+![](Spotify_Classification_files/figure-gfm/Loudness-2.jpeg)<!-- --> The
+only outlier from the `loudness` was the maximum valued observation in
+the dataset, which was removed accordingly. **Time Signature**
 
 ``` r
 # plot time_signature distribution
@@ -467,11 +471,23 @@ spotify_final <- spotify_clean %>%
   select(-loudness)
 ```
 
-## Data Pre-processing
+## Data Preparation
 
-### Train/Test/CV Split
+The final step before training our models is to create training,
+testing, and validation sets of the final version of the dataset. Since
+there is a random aspect to this step, a rule of thumb I learned is to
+set the seed of the current random number generator (RNG) state to any
+desired number to ensure the “random” component is properly done. Then,
+we create a 75%/25% split of our `spotify_final` dataset and proceed to
+create the training and testing sets with this split using the
+`training` and `testing` functions from the `rsample` package. Next, we
+create a 10-fold cross validation split for later training. Finally, the
+cross-validated split is used to create training and testing sets from
+within the dataset as `cv_data`. This allows us to essentially store a
+dataframe within a dataframe with the help of the `broom` package.
 
 ``` r
+set.seed(123)
 # creating create initial split 
 spotify_split <- initial_split(spotify_final, prop=0.75)
 
@@ -479,14 +495,63 @@ spotify_split <- initial_split(spotify_final, prop=0.75)
 spotify_train <- training(spotify_split)
 spotify_test <- testing(spotify_split)
 
-# create 5 fold cv split
+# create 10 fold cv split
 cv_split <- vfold_cv(spotify_train, v=10)
 
 # store cv dataset
 cv_data <- cv_split %>%
   mutate(train = map(splits, ~training(.x)),
          validate = map(splits, ~testing(.x)))
+
+glimpse(cv_data)
 ```
+
+    ## Rows: 10
+    ## Columns: 4
+    ## $ splits   <list> [<vfold_split[38539 x 4283 x 42822 x 10]>], [<vfold_split[38…
+    ## $ id       <chr> "Fold01", "Fold02", "Fold03", "Fold04", "Fold05", "Fold06", "…
+    ## $ train    <list> [<tbl_df[38539 x 10]>], [<tbl_df[38539 x 10]>], [<tbl_df[385…
+    ## $ validate <list> [<tbl_df[4283 x 10]>], [<tbl_df[4283 x 10]>], [<tbl_df[4282 …
+
+The `train` and `validate` (for predictions) columns are stored as lists
+of multiple data frames for each respective split fold. Let’s ensure
+these are properly stored with their supposed variables in place.
+
+``` r
+# training first fold set
+glimpse(cv_data$train[[1]])
+```
+
+    ## Rows: 38,539
+    ## Columns: 10
+    ## $ genre        <fct> Jazz, Country, Reggae, Reggae, Reggaeton, Country, Reggae…
+    ## $ popularity   <dbl> 34, 35, 36, 38, 59, 37, 28, 45, 26, 37, 67, 58, 46, 0, 36…
+    ## $ acousticness <dbl> 0.966000, 0.685000, 0.208000, 0.070500, 0.183000, 0.18200…
+    ## $ danceability <dbl> 0.624, 0.574, 0.785, 0.625, 0.819, 0.639, 0.768, 0.327, 0…
+    ## $ energy       <dbl> 0.18600, 0.60100, 0.37100, 0.44500, 0.55000, 0.65800, 0.8…
+    ## $ liveness     <dbl> 0.0921, 0.0412, 0.0448, 0.4850, 0.3200, 0.1290, 0.0674, 0…
+    ## $ speechiness  <dbl> 0.0460, 0.0461, 0.0824, 0.0458, 0.0695, 0.0618, 0.0996, 0…
+    ## $ tempo        <dbl> 78.682, 148.935, 82.913, 79.386, 108.980, 93.019, 134.838…
+    ## $ valence      <dbl> 0.4300, 0.7730, 0.9270, 0.6160, 0.8530, 0.5770, 0.4310, 0…
+    ## $ duration_min <dbl> 6.645333, 2.682883, 3.414000, 2.542667, 3.259783, 4.63621…
+
+``` r
+# validation first fold set
+glimpse(cv_data$validate[[1]])
+```
+
+    ## Rows: 4,283
+    ## Columns: 10
+    ## $ genre        <fct> Reggaeton, Reggae, Electronic, Reggae, Hip-Hop, Reggaeton…
+    ## $ popularity   <dbl> 26, 42, 35, 50, 69, 35, 32, 37, 34, 51, 23, 21, 66, 62, 3…
+    ## $ acousticness <dbl> 0.556000, 0.185000, 0.190000, 0.008210, 0.089600, 0.13100…
+    ## $ danceability <dbl> 0.787, 0.579, 0.821, 0.812, 0.780, 0.715, 0.538, 0.896, 0…
+    ## $ energy       <dbl> 0.396, 0.567, 0.287, 0.653, 0.729, 0.660, 0.898, 0.592, 0…
+    ## $ liveness     <dbl> 0.1150, 0.1220, 0.1260, 0.0708, 0.1040, 0.1100, 0.5220, 0…
+    ## $ speechiness  <dbl> 0.0979, 0.0307, 0.0830, 0.0346, 0.0493, 0.1970, 0.0502, 0…
+    ## $ tempo        <dbl> 129.961, 87.010, 81.044, 94.979, 123.009, 89.604, 171.987…
+    ## $ valence      <dbl> 0.226, 0.333, 0.834, 0.740, 0.844, 0.693, 0.637, 0.286, 0…
+    ## $ duration_min <dbl> 4.061533, 2.804600, 1.629167, 3.376517, 4.172283, 2.87845…
 
 ## Modeling
 
@@ -500,120 +565,116 @@ cv_models_mlr <- cv_data %>%
 
     ## # weights:  77 (60 variable)
     ## initial  value 74993.431234 
-    ## iter  10 value 69946.060832
-    ## iter  20 value 55824.058523
-    ## iter  30 value 49288.773845
-    ## iter  40 value 44958.222278
-    ## iter  50 value 43027.622459
-    ## iter  60 value 42515.552299
-    ## iter  70 value 42330.024236
-    ## iter  80 value 42328.420326
-    ## final  value 42328.419010 
+    ## iter  10 value 69761.659633
+    ## iter  20 value 53919.499855
+    ## iter  30 value 48856.430437
+    ## iter  40 value 44940.874385
+    ## iter  50 value 42903.490027
+    ## iter  60 value 42414.818703
+    ## iter  70 value 42227.495347
+    ## final  value 42225.217295 
     ## converged
     ## # weights:  77 (60 variable)
     ## initial  value 74993.431234 
-    ## iter  10 value 69687.370357
-    ## iter  20 value 54402.415251
-    ## iter  30 value 49359.992085
-    ## iter  40 value 45452.311526
-    ## iter  50 value 43112.033850
-    ## iter  60 value 42528.432653
-    ## iter  70 value 42299.005192
-    ## iter  80 value 42297.031146
-    ## final  value 42297.030306 
+    ## iter  10 value 69848.357609
+    ## iter  20 value 53475.052293
+    ## iter  30 value 47999.369400
+    ## iter  40 value 45066.456407
+    ## iter  50 value 42967.063667
+    ## iter  60 value 42450.514024
+    ## iter  70 value 42301.386065
+    ## final  value 42299.466532 
     ## converged
     ## # weights:  77 (60 variable)
     ## initial  value 74995.377145 
-    ## iter  10 value 70040.244154
-    ## iter  20 value 54986.951725
-    ## iter  30 value 50351.545628
-    ## iter  40 value 44892.230301
-    ## iter  50 value 43127.714820
-    ## iter  60 value 42527.877088
-    ## iter  70 value 42301.168383
-    ## iter  80 value 42299.011526
-    ## final  value 42299.009844 
+    ## iter  10 value 69606.812015
+    ## iter  20 value 54249.310561
+    ## iter  30 value 48245.335121
+    ## iter  40 value 44729.531757
+    ## iter  50 value 42910.995443
+    ## iter  60 value 42403.174547
+    ## iter  70 value 42260.123343
+    ## final  value 42257.811274 
     ## converged
     ## # weights:  77 (60 variable)
     ## initial  value 74995.377145 
-    ## iter  10 value 69945.212966
-    ## iter  20 value 54609.298965
-    ## iter  30 value 50036.970831
-    ## iter  40 value 45266.692235
-    ## iter  50 value 43076.150535
-    ## iter  60 value 42480.820534
-    ## iter  70 value 42240.600192
-    ## iter  80 value 42238.588956
-    ## final  value 42238.585914 
+    ## iter  10 value 69789.627650
+    ## iter  20 value 55417.716764
+    ## iter  30 value 48827.610416
+    ## iter  40 value 45471.868423
+    ## iter  50 value 42986.279169
+    ## iter  60 value 42432.139489
+    ## iter  70 value 42286.843340
+    ## iter  80 value 42285.679718
+    ## final  value 42285.678177 
     ## converged
     ## # weights:  77 (60 variable)
     ## initial  value 74995.377145 
-    ## iter  10 value 69908.827785
-    ## iter  20 value 53046.693565
-    ## iter  30 value 47699.740320
-    ## iter  40 value 44643.414341
-    ## iter  50 value 42958.859298
-    ## iter  60 value 42459.669305
-    ## iter  70 value 42331.665356
-    ## final  value 42329.820449 
+    ## iter  10 value 69923.365198
+    ## iter  20 value 57046.653568
+    ## iter  30 value 48954.627638
+    ## iter  40 value 44680.656516
+    ## iter  50 value 42954.400504
+    ## iter  60 value 42501.191262
+    ## iter  70 value 42318.075886
+    ## final  value 42316.422994 
     ## converged
     ## # weights:  77 (60 variable)
     ## initial  value 74995.377145 
-    ## iter  10 value 70020.049956
-    ## iter  20 value 53905.901333
-    ## iter  30 value 48452.453528
-    ## iter  40 value 44881.420347
-    ## iter  50 value 42954.049690
-    ## iter  60 value 42418.814697
-    ## iter  70 value 42252.832724
-    ## final  value 42251.482923 
+    ## iter  10 value 69769.578317
+    ## iter  20 value 53469.904469
+    ## iter  30 value 47935.133531
+    ## iter  40 value 44705.046025
+    ## iter  50 value 42915.072598
+    ## iter  60 value 42375.725414
+    ## iter  70 value 42236.183157
+    ## final  value 42234.220055 
     ## converged
     ## # weights:  77 (60 variable)
     ## initial  value 74995.377145 
-    ## iter  10 value 69720.677003
-    ## iter  20 value 53471.696226
-    ## iter  30 value 47916.727957
-    ## iter  40 value 44742.156011
-    ## iter  50 value 42938.048386
-    ## iter  60 value 42423.297523
-    ## iter  70 value 42295.307736
-    ## final  value 42293.838016 
+    ## iter  10 value 69791.891236
+    ## iter  20 value 54885.949275
+    ## iter  30 value 49924.528142
+    ## iter  40 value 45441.737450
+    ## iter  50 value 43130.047186
+    ## iter  60 value 42508.380330
+    ## iter  70 value 42271.095496
+    ## iter  80 value 42267.812127
+    ## final  value 42267.810792 
     ## converged
     ## # weights:  77 (60 variable)
     ## initial  value 74995.377145 
-    ## iter  10 value 69722.460436
-    ## iter  20 value 55714.284264
-    ## iter  30 value 48883.075668
-    ## iter  40 value 45091.151148
-    ## iter  50 value 43093.242349
-    ## iter  60 value 42524.645847
-    ## iter  70 value 42366.534577
-    ## iter  80 value 42364.567836
-    ## iter  80 value 42364.567516
-    ## iter  80 value 42364.567477
-    ## final  value 42364.567477 
+    ## iter  10 value 69923.674445
+    ## iter  20 value 54697.526585
+    ## iter  30 value 49172.382165
+    ## iter  40 value 45686.317122
+    ## iter  50 value 43022.372059
+    ## iter  60 value 42482.136625
+    ## iter  70 value 42331.550313
+    ## iter  80 value 42330.561215
+    ## final  value 42330.559362 
     ## converged
     ## # weights:  77 (60 variable)
     ## initial  value 74995.377145 
-    ## iter  10 value 69809.211170
-    ## iter  20 value 56105.567040
-    ## iter  30 value 49818.789460
-    ## iter  40 value 45167.644579
-    ## iter  50 value 43044.895766
-    ## iter  60 value 42469.218957
-    ## iter  70 value 42304.740508
-    ## final  value 42302.094885 
+    ## iter  10 value 69985.022668
+    ## iter  20 value 53996.823900
+    ## iter  30 value 48970.057573
+    ## iter  40 value 45044.341367
+    ## iter  50 value 42984.557642
+    ## iter  60 value 42555.186640
+    ## iter  70 value 42342.457506
+    ## final  value 42339.849528 
     ## converged
     ## # weights:  77 (60 variable)
     ## initial  value 74995.377145 
-    ## iter  10 value 69677.437890
-    ## iter  20 value 55555.487295
-    ## iter  30 value 48699.567332
-    ## iter  40 value 44963.958128
-    ## iter  50 value 43142.097317
-    ## iter  60 value 42567.855986
-    ## iter  70 value 42358.868962
-    ## final  value 42356.652366 
+    ## iter  10 value 70080.570161
+    ## iter  20 value 55616.919984
+    ## iter  30 value 49199.117472
+    ## iter  40 value 44969.796949
+    ## iter  50 value 42882.848040
+    ## iter  60 value 42405.314323
+    ## iter  70 value 42245.565559
+    ## final  value 42243.710316 
     ## converged
 
 **Model Performance**
@@ -635,20 +696,20 @@ table(mlr_test_actual, mlr_test_predicted)
 
     ##                mlr_test_predicted
     ## mlr_test_actual Country Electronic Hip-Hop Classical Reggae Reggaeton Jazz
-    ##      Country       1086        193      52        41    111        85  267
-    ##      Electronic     218       1272     103        58    239       278  115
-    ##      Hip-Hop         74         78    1521         0     26        74   34
-    ##      Classical       50        125       0      1673      3         2  131
-    ##      Reggae         160        228      96        12   1129       418  144
-    ##      Reggaeton      120        274     211         6    356      1155   73
-    ##      Jazz           215        179      58       252    319       161  799
+    ##      Country       1070        194      48        41     91        99  277
+    ##      Electronic     228       1256     109        75    202       317  118
+    ##      Hip-Hop         95         71    1582         0     39        69   41
+    ##      Classical       45        123       0      1654      4         2  142
+    ##      Reggae         170        274     104        15   1090       409  136
+    ##      Reggaeton      118        221     212         5    334      1109   58
+    ##      Jazz           226        201      45       252    308       184  811
 
 ``` r
 # Calculate the accuracy
 accuracy(mlr_test_actual, mlr_test_predicted)
 ```
 
-    ## [1] 0.6049461
+    ## [1] 0.6005324
 
 ### Random Forest
 
@@ -661,7 +722,7 @@ cv_tune_rf <- cv_data %>%
 cv_models_rf <- cv_tune_rf %>% 
   mutate(model = map2(train, mtry, ~ranger(formula = genre~., 
                                            data = .x, mtry = .y,
-                                           num.trees = 100, seed = 84)))
+                                           num.trees = 100, seed = 123)))
 ```
 
 **Model Tuning**
@@ -687,10 +748,10 @@ cv_perf_acc_rf %>%
     ## # A tibble: 5 × 2
     ##    mtry mean_acc
     ##   <int>    <dbl>
-    ## 1     1    0.689
-    ## 2     2    0.694
-    ## 3     3    0.691
-    ## 4     4    0.692
+    ## 1     1    0.688
+    ## 2     2    0.692
+    ## 3     3    0.692
+    ## 4     4    0.691
     ## 5     5    0.689
 
 **Model Performance**
@@ -716,22 +777,24 @@ table(rf_test_actual, rf_test_predicted)
 
     ##               rf_test_predicted
     ## rf_test_actual Country Electronic Hip-Hop Classical Reggae Reggaeton Jazz
-    ##     Country       1326        128      35         8     70        63  205
-    ##     Electronic     155       1510     111        24    200       147  136
-    ##     Hip-Hop         35         44    1622         0     33        58   15
-    ##     Classical       19        123       0      1720      5         0  117
-    ##     Reggae         133        190     113         8   1227       371  145
-    ##     Reggaeton       83        151     197         1    295      1396   72
-    ##     Jazz           161        201      53       142    212       108 1106
+    ##     Country       1312        128      34         4     80        73  189
+    ##     Electronic     158       1522      97        29    192       161  146
+    ##     Hip-Hop         45         47    1676         0     42        62   25
+    ##     Classical       16        108       1      1716      2         2  125
+    ##     Reggae         139        218     114         7   1240       346  134
+    ##     Reggaeton       77        142     211         1    243      1337   46
+    ##     Jazz           164        192      40       161    208       137 1125
 
 ``` r
 # Calculate the test accuracy
 accuracy(rf_test_actual, rf_test_predicted)
 ```
 
-    ## [1] 0.6940591
+    ## [1] 0.6955303
 
 ### Model Comparison
+
+**Multinomial Logistic Regression**
 
 ``` r
 # store multinom confusion matrix
@@ -749,6 +812,8 @@ mlr_confmat %>%
 
 ![](Spotify_Classification_files/figure-gfm/MLR%20Confusion%20Matrix-1.jpeg)<!-- -->
 
+**Random Forest**
+
 ``` r
 # store random forest confusion matrix
 rf_confmat <- as.data.frame(table(rf_test_actual, rf_test_predicted))
@@ -765,4 +830,11 @@ rf_confmat %>%
 
 ![](Spotify_Classification_files/figure-gfm/RF%20Confusion%20Matrix-1.jpeg)<!-- -->
 
-## Conclusion
+## Conclusion and Further Steps
+
+-   Encode genres into less categories (genres in this case)
+-   More data, builds on encoding, to have more rows with less labels in
+    our response variable (variable to predict), thus less memory usage
+    and faster run time.
+-   Utilize variable importance to reduce number of irrelevant
+    predictors.
