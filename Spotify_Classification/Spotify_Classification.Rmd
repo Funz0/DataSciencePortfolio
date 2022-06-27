@@ -7,8 +7,6 @@ output:
     dev: jpeg
 ---
 
-***GRAMMAR CHECK ALL MARKDOWN TEXT BEFORE UPLOADING***
-
 ## Context
 
 ![](spotify-logo.png)
@@ -193,6 +191,8 @@ spotify_clean %>%
   ggtitle("Duration(in minutes) - no outliers")
 ```
 
+Since the boxplot with no outliers has better distribution, I stored the new version of the dataset to reflect the `duration_outliers` not present.
+
 **Instrumentalness**
 
 ```{r "Instrumentalness", warning=FALSE}
@@ -245,7 +245,7 @@ spotify_clean %>%
   coord_flip() +
   ggtitle("Loudness - no outliers")
 ```
-
+The only outlier from the `loudness` was the maximum valued observation in the dataset, which was removed accordingly. 
 **Time Signature**
 
 ```{r "Time Signature"}
@@ -284,11 +284,12 @@ spotify_final <- spotify_clean %>%
   select(-loudness)
 ```
 
-## Data Pre-processing
+## Data Preparation
 
-### Train/Test/CV Split
+The final step before training our models is to create training, testing, and validation sets of the final version of the dataset. Since there is a random aspect to this step, a rule of thumb I learned is to set the seed of the current random number generator (RNG) state to any desired number to ensure the "random" component is properly done. Then, we create a 75%/25% split of our `spotify_final` dataset and proceed to create the training and testing sets with this split using the `training` and `testing` functions from the `rsample` package. Next, we create a 10-fold cross validation split for later training. Finally, the cross-validated split is used to create training and testing sets from within the dataset as `cv_data`. This allows us to essentially store a dataframe within a dataframe with the help of the `broom` package.
 
 ```{r "Train/Test Split"}
+set.seed(123)
 # creating create initial split 
 spotify_split <- initial_split(spotify_final, prop=0.75)
 
@@ -296,13 +297,27 @@ spotify_split <- initial_split(spotify_final, prop=0.75)
 spotify_train <- training(spotify_split)
 spotify_test <- testing(spotify_split)
 
-# create 5 fold cv split
+# create 10 fold cv split
 cv_split <- vfold_cv(spotify_train, v=10)
 
 # store cv dataset
 cv_data <- cv_split %>%
   mutate(train = map(splits, ~training(.x)),
          validate = map(splits, ~testing(.x)))
+
+glimpse(cv_data)
+```
+
+The `train` and `validate` (for predictions) columns are stored as lists of multiple data frames for each respective split fold. Let's ensure these are properly stored with their supposed variables in place.
+
+```{r}
+# training first fold set
+glimpse(cv_data$train[[1]])
+```
+
+```{r}
+# validation first fold set
+glimpse(cv_data$validate[[1]])
 ```
 
 ## Modeling
@@ -316,8 +331,6 @@ cv_data <- cv_split %>%
 cv_models_mlr <- cv_data %>%
   mutate(model = map(train, ~multinom(genre~., data=.x)))
 ```
-
-
 
 **Model Performance**
 
@@ -351,7 +364,7 @@ cv_tune_rf <- cv_data %>%
 cv_models_rf <- cv_tune_rf %>% 
   mutate(model = map2(train, mtry, ~ranger(formula = genre~., 
                                            data = .x, mtry = .y,
-                                           num.trees = 100, seed = 84)))
+                                           num.trees = 100, seed = 123)))
 
 ```
 
@@ -402,6 +415,8 @@ accuracy(rf_test_actual, rf_test_predicted)
 
 ### Model Comparison
 
+**Multinomial Logistic Regression**
+
 ```{r "MLR Confusion Matrix"}
 # store multinom confusion matrix
 mlr_confmat <- as.data.frame(table(mlr_test_actual, mlr_test_predicted))
@@ -416,7 +431,7 @@ mlr_confmat %>%
   labs(x = "Actual", y = "Predicted")
 ```
 
-
+**Random Forest**
 
 ```{r "RF Confusion Matrix"}
 # store random forest confusion matrix
@@ -432,5 +447,8 @@ rf_confmat %>%
   labs(x = "Actual", y = "Predicted")
 ```
 
-## Conclusion
+## Conclusion and Further Steps
 
+- Encode genres into less categories (genres in this case)
+- More data, builds on encoding, to have more rows with less labels in our response variable (variable to predict), thus less memory usage and faster run time.
+- Utilize variable importance to reduce number of irrelevant predictors.
