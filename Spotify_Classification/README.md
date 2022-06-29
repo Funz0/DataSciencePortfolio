@@ -557,6 +557,15 @@ glimpse(cv_data$validate[[1]])
 
 ### Logistic Regression
 
+A **logistic regression** is a generalized linear model that predicts a
+continuous and class outcome on data with a linear relationship between
+the predictor variables, X, and the log-odds of the response variable,
+y. In our case, there are more than two possible genres within the
+response variable values, thus a multinomial logistic regression is used
+instead of a binomial one, which is its default. The model will be
+mapped to each cross-validated fold in the training data from the
+`cv_data` dataframe.
+
 ``` r
 # build multinom logistic regression model
 cv_models_mlr <- cv_data %>%
@@ -679,6 +688,10 @@ cv_models_mlr <- cv_data %>%
 
 **Model Performance**
 
+Now that the model is built and trained using the cross-validated data,
+it’s time to predict on the testing data, `spotify_test` and record the
+results as `class` types for accuracy validation.
+
 ``` r
 # Prepare actual test set classes
 mlr_test_actual <- spotify_test$genre
@@ -688,6 +701,9 @@ mlr_test_predicted <- predict(cv_models_mlr$model[[2]], spotify_test, type = "cl
 ```
 
 **Test Set Performance**
+
+The next action is to compare the actual and predicted genre
+classifications.
 
 ``` r
 # Compare the actual & predicted performance visually using a table
@@ -711,7 +727,16 @@ accuracy(mlr_test_actual, mlr_test_predicted)
 
     ## [1] 0.6005324
 
+It seems we have reached \~%60 accuracy in correctly guessing a track’s
+genre.
+
 ### Random Forest
+
+**Random forests** are a tree-based aggregating ensemble classifications
+created by multiple decision trees of varying depth. This model helps
+avoid overfitting and prediction accuracy. As model tuning works well
+with this type of model, the `mtry` number will be determined once the
+iteration with highest accuracy is found.
 
 ``` r
 # determine tuning params before modeling
@@ -726,6 +751,11 @@ cv_models_rf <- cv_tune_rf %>%
 ```
 
 **Model Tuning**
+
+With the built model, we now move on to the tuning phase. The two
+additional nested lists containing both the actual and predicted
+classes. This will allow us to then store the test set accuracy for each
+`mtry` to find the ideal integer to run the model under.
 
 ``` r
 # Generate validate predictions for each model
@@ -754,12 +784,19 @@ cv_perf_acc_rf %>%
     ## 4     4    0.691
     ## 5     5    0.689
 
+The highest average accuracy (\~69%) was recorded at 3 `mtry`.
+
 **Model Performance**
+
+To know the best performing model, we will use our best performing
+`mtry` parameter and 500 trees. All that is left afterwards is to store
+the actual values as a vector and the predicted values using the best
+random forest model, also stored as a vector.
 
 ``` r
 # Build the logistic regression model using all training data
 rf_best_model <- ranger(genre~., data = spotify_train, 
-                     num.trees = 500, mtry = 2)
+                     num.trees = 500, mtry = 3)
 
 # Prepare binary vector of actual Attrition values for testing_data
 rf_test_actual <- spotify_test$genre
@@ -770,6 +807,9 @@ rf_test_predicted <- predict(rf_best_model, spotify_test, type = "response")$pre
 
 **Test Set Performance**
 
+Finally, we can compute a contingency table along with the overall
+accuracy from the best random forest model.
+
 ``` r
 # Compare the actual & predicted performance visually using a table
 table(rf_test_actual, rf_test_predicted)
@@ -777,27 +817,34 @@ table(rf_test_actual, rf_test_predicted)
 
     ##               rf_test_predicted
     ## rf_test_actual Country Electronic Hip-Hop Classical Reggae Reggaeton Jazz
-    ##     Country       1312        128      34         4     80        73  189
-    ##     Electronic     158       1522      97        29    192       161  146
-    ##     Hip-Hop         45         47    1676         0     42        62   25
-    ##     Classical       16        108       1      1716      2         2  125
-    ##     Reggae         139        218     114         7   1240       346  134
-    ##     Reggaeton       77        142     211         1    243      1337   46
-    ##     Jazz           164        192      40       161    208       137 1125
+    ##     Country       1308        132      34         4     75        73  194
+    ##     Electronic     159       1516      96        35    205       155  139
+    ##     Hip-Hop         47         43    1669         1     47        67   23
+    ##     Classical       15        105       1      1711      4         1  133
+    ##     Reggae         130        225     111         8   1246       335  143
+    ##     Reggaeton       77        143     211         1    240      1334   51
+    ##     Jazz           171        189      39       160    208       126 1134
 
 ``` r
 # Calculate the test accuracy
 accuracy(rf_test_actual, rf_test_predicted)
 ```
 
-    ## [1] 0.6955303
+    ## [1] 0.6948298
+
+The best overall accuracy of our model is 69.48%.
 
 ### Model Comparison
 
-**Multinomial Logistic Regression**
+Now that we have built, trained, and validated our logistic regression
+and random forest models, it’s time to see size up to one another. A way
+of visualizing both models’ performance is with a confusion matrix to
+show how each genre was classified on each model.
+
+**Logistic Regression**
 
 ``` r
-# store multinom confusion matrix
+# store multinom lr confusion matrix
 mlr_confmat <- as.data.frame(table(mlr_test_actual, mlr_test_predicted))
 
 # visualize confusion matrix
@@ -811,6 +858,8 @@ mlr_confmat %>%
 ```
 
 ![](Spotify_Classification_files/figure-gfm/MLR%20Confusion%20Matrix-1.jpeg)<!-- -->
+It seems the logistic regression was better at classifying Classical and
+Hip-Hop genres, while being the worst at classifying Jazz.
 
 **Random Forest**
 
@@ -829,12 +878,18 @@ rf_confmat %>%
 ```
 
 ![](Spotify_Classification_files/figure-gfm/RF%20Confusion%20Matrix-1.jpeg)<!-- -->
+There is a similar pattern here as the same genres (Classical and
+Hip-Hop) are the most correctly predicted genres and Jazz being the
+least predicted genre. That being said, there are nearly 300 more
+accurate predictions compared to the logistic regression’s
+classifications.
 
 ## Conclusion and Further Steps
 
--   Encode genres into less categories (genres in this case)
+-   The Random Forest model was the highest performing model at 3 `mtry`
+    and 500 trees, with an overall accuracy of 69.48%.
+-   Encode genres into less categories (e.g. Dance = Electronic)
 -   More data, builds on encoding, to have more rows with less labels in
-    our response variable (variable to predict), thus less memory usage
-    and faster run time.
--   Utilize variable importance to reduce number of irrelevant
-    predictors.
+    our response variable (variable to predict), thus less memory usage,
+    faster run time, and possibly better accuracy.
+-   Utilize variable importance to remove under performing predictors.
