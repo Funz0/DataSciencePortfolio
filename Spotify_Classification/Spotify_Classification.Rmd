@@ -322,9 +322,9 @@ glimpse(cv_data$validate[[1]])
 
 ## Modeling
 
-
-
 ### Logistic Regression
+
+A **logistic regression** is a generalized linear model that predicts a continuous and class outcome on data with a linear relationship between the predictor variables, X, and the log-odds of the response variable, y. In our case, there are more than two possible genres within the response variable values, thus a multinomial logistic regression is used instead of a binomial one, which is its default. The model will be mapped to each cross-validated fold in the training data from the `cv_data` dataframe.
 
 ```{r "Logistic Regression"}
 # build multinom logistic regression model
@@ -333,6 +333,8 @@ cv_models_mlr <- cv_data %>%
 ```
 
 **Model Performance**
+
+Now that the model is built and trained using the cross-validated data, it's time to predict on the testing data, `spotify_test` and record the results as `class` types for accuracy validation.
 
 ```{r "MLR Model Performance"}
 # Prepare actual test set classes
@@ -344,6 +346,8 @@ mlr_test_predicted <- predict(cv_models_mlr$model[[2]], spotify_test, type = "cl
 
 **Test Set Performance**
 
+The next action is to compare the actual and predicted genre classifications.
+
 ```{r "MLR Test Set Performance"}
 # Compare the actual & predicted performance visually using a table
 table(mlr_test_actual, mlr_test_predicted)
@@ -352,8 +356,11 @@ table(mlr_test_actual, mlr_test_predicted)
 accuracy(mlr_test_actual, mlr_test_predicted)
 ```
 
+It seems we have reached ~%60 accuracy in correctly guessing a track's genre.
 
 ### Random Forest
+
+**Random forests** are a tree-based aggregating ensemble classifications created by multiple decision trees of varying depth. This model helps avoid overfitting and prediction accuracy. As model tuning works well with this type of model, the `mtry` number will be determined once the iteration with highest accuracy is found.
 
 ```{r "Random Forest"}
 # determine tuning params before modeling
@@ -369,6 +376,8 @@ cv_models_rf <- cv_tune_rf %>%
 ```
 
 **Model Tuning**
+
+With the built model, we now move on to the tuning phase. The two additional nested lists containing both the actual and predicted classes. This will allow us to then store the test set accuracy for each `mtry` to find the ideal integer to run the model under.
 
 ```{r "RF Model Tuning"}
 # Generate validate predictions for each model
@@ -388,12 +397,16 @@ cv_perf_acc_rf %>%
   summarize(mean_acc = mean(validate_acc))
 ```
 
+The highest average accuracy (~69%) was recorded at 3 `mtry`.
+
 **Model Performance**
+
+To know the best performing model, we will use our best performing `mtry` parameter and 500 trees. All that is left afterwards is to store the actual values as a vector and the predicted values using the best random forest model, also stored as a vector.
 
 ```{r "RF Model Performance"}
 # Build the logistic regression model using all training data
 rf_best_model <- ranger(genre~., data = spotify_train, 
-                     num.trees = 500, mtry = 2)
+                     num.trees = 500, mtry = 3)
 
 # Prepare binary vector of actual Attrition values for testing_data
 rf_test_actual <- spotify_test$genre
@@ -404,6 +417,8 @@ rf_test_predicted <- predict(rf_best_model, spotify_test, type = "response")$pre
 
 **Test Set Performance**
 
+Finally, we can compute a contingency table along with the overall accuracy from the best random forest model.
+
 ```{r "RF Test Set Performance"}
 # Compare the actual & predicted performance visually using a table
 table(rf_test_actual, rf_test_predicted)
@@ -412,13 +427,16 @@ table(rf_test_actual, rf_test_predicted)
 accuracy(rf_test_actual, rf_test_predicted)
 ```
 
+The best overall accuracy of our model is 69.48%.
 
 ### Model Comparison
 
-**Multinomial Logistic Regression**
+Now that we have built, trained, and validated our logistic regression and random forest models, it's time to see size up to one another. A way of visualizing both models' performance is with a confusion matrix to show how each genre was classified on each model. 
+
+**Logistic Regression**
 
 ```{r "MLR Confusion Matrix"}
-# store multinom confusion matrix
+# store multinom lr confusion matrix
 mlr_confmat <- as.data.frame(table(mlr_test_actual, mlr_test_predicted))
 
 # visualize confusion matrix
@@ -430,6 +448,7 @@ mlr_confmat %>%
                       high = "red") +
   labs(x = "Actual", y = "Predicted")
 ```
+It seems the logistic regression was better at classifying Classical and Hip-Hop genres, while being the worst at classifying Jazz.
 
 **Random Forest**
 
@@ -446,9 +465,11 @@ rf_confmat %>%
                       high = "red") +
   labs(x = "Actual", y = "Predicted")
 ```
+There is a similar pattern here as the same genres (Classical and Hip-Hop) are the most correctly predicted genres and Jazz being the least predicted genre. That being said, there are nearly 300 more accurate predictions compared to the logistic regression's classifications.
 
 ## Conclusion and Further Steps
 
-- Encode genres into less categories (genres in this case)
-- More data, builds on encoding, to have more rows with less labels in our response variable (variable to predict), thus less memory usage and faster run time.
-- Utilize variable importance to reduce number of irrelevant predictors.
+- The Random Forest model was the highest performing model at 3 `mtry` and 500 trees, with an overall accuracy of 69.48%.
+- Encode genres into less categories (e.g. Dance = Electronic)
+- More data, builds on encoding, to have more rows with less labels in our response variable (variable to predict), thus less memory usage, faster run time, and possibly better accuracy.
+- Utilize variable importance to remove under performing predictors.
