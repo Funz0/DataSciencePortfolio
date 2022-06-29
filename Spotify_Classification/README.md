@@ -727,7 +727,7 @@ accuracy(mlr_test_actual, mlr_test_predicted)
 
     ## [1] 0.6005324
 
-It seems we have reached \~%60 accuracy in correctly guessing a track’s
+It seems we have reached ~60% accuracy in correctly guessing a track’s
 genre.
 
 ### Random Forest
@@ -784,7 +784,7 @@ cv_perf_acc_rf %>%
     ## 4     4    0.691
     ## 5     5    0.689
 
-The highest average accuracy (\~69%) was recorded at 3 `mtry`.
+The highest average accuracy ~69% was recorded at 3 `mtry`.
 
 **Model Performance**
 
